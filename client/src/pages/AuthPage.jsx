@@ -1,36 +1,37 @@
-import { useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Compass, Mail, Lock, User, ChevronDown, Star, ShieldCheck } from 'lucide-react';
+import { Compass, Star, ShieldCheck, MapPin, UserCircle, Shield } from 'lucide-react';
 import Reveal from '../components/Reveal.jsx';
 
-const inputBase =
-  'w-full rounded-xl border border-slate-200 bg-slate-50/60 py-3 pl-11 pr-3 text-sm text-slate-900 outline-none transition-all duration-300 placeholder:text-slate-400 focus:border-brand-400 focus:bg-white focus:ring-4 focus:ring-brand-500/15';
-
-function Field({ id, label, children }) {
-  return (
-    <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-slate-700">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
+const roles = [
+  {
+    key: 'tourist',
+    label: 'Login as Tourist',
+    description: 'Explore guides, view profiles, and book tours.',
+    icon: MapPin,
+    gradient: 'from-brand-600 to-teal-600',
+    shadow: 'shadow-brand-600/30',
+    hoverShadow: 'hover:shadow-glow',
+  },
+  {
+    key: 'guide',
+    label: 'Login as Local Guide',
+    description: 'Manage your profile, set rates, and connect with tourists.',
+    icon: UserCircle,
+    gradient: 'from-emerald-600 to-teal-600',
+    shadow: 'shadow-emerald-600/30',
+    hoverShadow: 'hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.4)]',
+  },
+  {
+    key: 'admin',
+    label: 'Admin Login',
+    description: 'Full access to manage guides, bookings, and users.',
+    icon: Shield,
+    gradient: 'from-ink-900 to-slate-700',
+    shadow: 'shadow-ink-900/30',
+    hoverShadow: 'hover:shadow-xl',
+  },
+];
 
 export default function AuthPage({ onLogin }) {
-  const [params] = useSearchParams();
-  const navigate = useNavigate();
-  const initialMode = params.get('mode') === 'register' ? 'register' : 'login';
-  const [mode, setMode] = useState(initialMode);
-
-  const isRegister = mode === 'register';
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onLogin();
-    navigate('/guides');
-  };
-
   return (
     <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl items-center justify-center overflow-hidden px-4 py-12 sm:px-6 lg:px-8">
       {/* ambient background */}
@@ -70,8 +71,7 @@ export default function AuthPage({ onLogin }) {
                 <span className="text-gradient">story.</span>
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-slate-400">
-                Join thousands of travelers who explore with local, vetted tourist guides — or sign
-                up as a guide and share your city with the world.
+                Choose your role to continue. Tourists can browse guides, local guides can manage their profiles, and admins have full control.
               </p>
 
               <div className="glass mt-8 flex animate-float items-center gap-3 rounded-2xl p-4">
@@ -101,100 +101,41 @@ export default function AuthPage({ onLogin }) {
             </p>
           </div>
 
-          {/* ---------- Form panel ---------- */}
-          <div className="p-8 sm:p-10">
+          {/* ---------- Role selection panel ---------- */}
+          <div className="flex flex-col justify-center p-8 sm:p-10">
             <h1 className="font-display text-2xl font-extrabold text-slate-900">
-              {isRegister ? 'Create your account' : 'Welcome back'}
+              Choose your role
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              {isRegister ? 'Join WanderGuides in less than a minute.' : 'Log in to continue exploring.'}
+              Select how you'd like to use WanderGuides.
             </p>
 
-            {/* Toggle with sliding pill */}
-            <div className="relative mt-6 grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
-              <span
-                aria-hidden="true"
-                className={`absolute bottom-1 top-1 w-[calc(50%-4px)] rounded-xl bg-white shadow-md transition-all duration-400 ease-out ${
-                  mode === 'register' ? 'left-[calc(50%)]' : 'left-1'
-                }`}
-              />
-              {['login', 'register'].map((m) => (
+            <div className="mt-8 space-y-3">
+              {roles.map(({ key, label, description, icon: Icon, gradient, shadow, hoverShadow }) => (
                 <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`relative z-10 rounded-xl py-2.5 text-sm font-semibold capitalize transition-colors duration-300 ${
-                    mode === m ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'
-                  }`}
+                  key={key}
+                  onClick={() => onLogin(key)}
+                  className={`group w-full text-left rounded-2xl border border-slate-200 bg-white p-5 transition-all duration-300 hover:border-transparent hover:bg-gradient-to-r ${gradient} hover:shadow-lg ${shadow} ${hoverShadow} hover:-translate-y-0.5`}
                 >
-                  {m}
+                  <div className="flex items-center gap-4">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all duration-300 group-hover:bg-white/20 group-hover:text-white">
+                      <Icon className="h-6 w-6" />
+                    </span>
+                    <div>
+                      <h3 className="font-display text-base font-bold text-slate-900 transition-colors duration-300 group-hover:text-white">
+                        {label}
+                      </h3>
+                      <p className="mt-0.5 text-xs text-slate-500 transition-colors duration-300 group-hover:text-white/80">
+                        {description}
+                      </p>
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>
 
-            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-              {isRegister && (
-                <Field id="name" label="Full name">
-                  <div className="relative">
-                    <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input id="name" type="text" required placeholder="Minh Tran" className={inputBase} />
-                  </div>
-                </Field>
-              )}
-
-              <Field id="email" label="Email address">
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    placeholder="you@example.com"
-                    className={inputBase}
-                  />
-                </div>
-              </Field>
-
-              <Field id="password" label="Password">
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    id="password"
-                    type="password"
-                    required
-                    minLength={6}
-                    placeholder="••••••••"
-                    className={inputBase}
-                  />
-                </div>
-              </Field>
-
-              {isRegister && (
-                <Field id="role" label="I am a...">
-                  <div className="relative">
-                    <select
-                      id="role"
-                      className={`${inputBase} appearance-none bg-white pr-9`}
-                      defaultValue="tourist"
-                    >
-                      <option value="tourist">Tourist — I want to hire guides</option>
-                      <option value="guide">Tour Guide — I want to offer tours</option>
-                    </select>
-                    <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  </div>
-                </Field>
-              )}
-
-              <button
-                type="submit"
-                className="btn-sheen w-full rounded-xl bg-gradient-to-r from-brand-600 via-teal-600 to-emerald-600 py-3 text-sm font-bold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow"
-              >
-                {isRegister ? 'Create account' : 'Log in'}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-xs text-slate-400">
-              Demo mode &mdash; any credentials log you in. Mock `isAuthenticated` in App.jsx.
+            <p className="mt-8 text-center text-xs text-slate-400">
+              Demo mode &mdash; any role selection logs you in instantly.
             </p>
           </div>
         </div>

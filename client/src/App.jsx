@@ -12,12 +12,23 @@ import ProfilePage from './pages/ProfilePage.jsx';
 import ProtectedLayout from './components/ProtectedLayout.jsx';
 
 export default function App() {
-  // Mock auth state — flip to true to preview the logged-in experience.
+  // Mock auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [role, setRole] = useState(null); // 'tourist' | 'guide' | 'admin'
+
+  const handleLogin = (selectedRole) => {
+    setIsAuthenticated(true);
+    setRole(selectedRole);
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setRole(null);
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar isAuthenticated={isAuthenticated} onLogout={() => setIsAuthenticated(false)} />
+      <Navbar isAuthenticated={isAuthenticated} role={role} onLogout={handleLogout} />
 
       <main className="flex-1">
         <Routes>
@@ -27,7 +38,7 @@ export default function App() {
           {!isAuthenticated && (
             <Route
               path="/auth"
-              element={<AuthPage onLogin={() => setIsAuthenticated(true)} />}
+              element={<AuthPage onLogin={handleLogin} />}
             />
           )}
 
@@ -36,12 +47,12 @@ export default function App() {
             path="/"
             element={<ProtectedLayout isAuthenticated={isAuthenticated} />}
           >
-            <Route path="guides" element={<GuidesPage />} />
-            <Route path="guides/new" element={<GuideFormPage />} />
-            <Route path="guides/:id/edit" element={<GuideFormPage />} />
-            <Route path="bookings" element={<BookingsPage />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="profile" element={<ProfilePage />} />
+            <Route path="guides" element={<GuidesPage role={role} />} />
+            {role === 'admin' && <Route path="guides/new" element={<GuideFormPage />} />}
+            {role === 'admin' && <Route path="guides/:id/edit" element={<GuideFormPage />} />}
+            <Route path="bookings" element={<BookingsPage role={role} />} />
+            <Route path="dashboard" element={<DashboardPage role={role} />} />
+            <Route path="profile" element={<ProfilePage role={role} />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />
