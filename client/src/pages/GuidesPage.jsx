@@ -15,7 +15,7 @@ export function ComingSoon({ icon: Icon, title, message }) {
   );
 }
 
-export default function GuidesPage() {
+export default function GuidesPage({ role }) {
   const [guides, setGuides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,14 +64,16 @@ export default function GuidesPage() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
         <PageHeader
-          eyebrow="Manage Guides"
+          eyebrow={role === 'admin' ? 'Manage Guides' : 'Explore Guides'}
           title="Guide Directory"
-          description="Create, view, edit, and delete guide profiles."
+          description={role === 'admin' ? 'Create, view, edit, and delete guide profiles.' : 'Browse available tourist guides and their details.'}
         />
-        <Link to="/guides/new" className="btn-sheen inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow">
-          <Plus className="h-4 w-4" />
-          Add Guide
-        </Link>
+        {role === 'admin' && (
+          <Link to="/guides/new" className="btn-sheen inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow">
+            <Plus className="h-4 w-4" />
+            Add Guide
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
@@ -125,7 +127,7 @@ export default function GuidesPage() {
                   <th className="px-4 py-3">Rate/Day</th>
                   <th className="px-4 py-3">Rating</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  {role === 'admin' && <th className="px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -151,16 +153,18 @@ export default function GuidesPage() {
                         {g.IsActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link to={`/guides/${g.Id}/edit`} className="p-2 rounded-lg text-slate-500 hover:bg-brand-50 hover:text-brand-600 transition-colors" title="Edit">
-                          <Edit className="h-4 w-4" />
-                        </Link>
-                        <button onClick={() => handleDelete(g.Id)} className="p-2 rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors" title="Delete">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {role === 'admin' && (
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link to={`/guides/${g.Id}/edit`} className="p-2 rounded-lg text-slate-500 hover:bg-brand-50 hover:text-brand-600 transition-colors" title="Edit">
+                            <Edit className="h-4 w-4" />
+                          </Link>
+                          <button onClick={() => handleDelete(g.Id)} className="p-2 rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors" title="Delete">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
