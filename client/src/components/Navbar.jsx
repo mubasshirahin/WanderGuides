@@ -1,20 +1,35 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle } from 'lucide-react';
+import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus } from 'lucide-react';
 
 const loggedOutLinks = [{ to: '/', label: 'Home' }];
 
-const loggedInLinks = [
-  { to: '/guides', label: 'Search Guides', icon: Search },
-  { to: '/bookings', label: 'Bookings', icon: CalendarDays },
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/profile', label: 'Profile', icon: UserCircle },
-];
+const roleLinks = {
+  tourist: [
+    { to: '/guides', label: 'Search Guides', icon: Search },
+    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/profile', label: 'Profile', icon: UserCircle },
+  ],
+  guide: [
+    { to: '/guides', label: 'My Profile', icon: UserCircle },
+    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/profile', label: 'Profile', icon: UserCircle },
+  ],
+  admin: [
+    { to: '/guides', label: 'Manage Guides', icon: Search },
+    { to: '/guides/new', label: 'Add Guide', icon: Plus },
+    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/profile', label: 'Profile', icon: UserCircle },
+  ],
+};
 
-export default function Navbar({ isAuthenticated, onLogout }) {
+export default function Navbar({ isAuthenticated, role, onLogout }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const links = isAuthenticated ? loggedInLinks : loggedOutLinks;
+  const links = isAuthenticated ? (roleLinks[role] || roleLinks.tourist) : loggedOutLinks;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
