@@ -1,0 +1,163 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Plus, Search, Edit, Trash2, MapPin, Star, Languages, Loader2 } from 'lucide-react';
+import PageHeader from '../components/PageHeader.jsx';
+
+const API = '/api/guides';
+
+export default function GuidesPage() {
+  const [guides, setGuides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
+  const [cities, setCities] = useState([]);
+
+  const fetchGuides = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (cityFilter) params.set('city', cityFilter);
+      const res = await fetch(`${API}?${params.toString()}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message || 'Failed to load');
+      setGuides(data.guides);
+      // collect unique cities
+      const unique = [...new Set(data.guides.map(g => g.City).filter(Boolean))].sort();
+      setCities(unique);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchGuides(); }, [cityFilter]);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this guide?')) return;
+    try {
+      const res = await fetch(`${API}/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message || 'Delete failed');
+      setGuides(g => g.filter(g => g.Id !== id));
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const filtered = guides.filter(g =>
+    (g.FullName + ' ' + g.City + ' ' + (g.Specialties || '')).toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+        <PageHeader
+          eyebrow="Manage Guides"
+          title="Guide Directory"
+          description="Create, view, edit, and delete guide profiles."
+        />
+        <Link to="/guides/new" className="btn-sheen inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow">
+          <Plus className="h-4 w-4" />
+          Add Guide
+        </Link>
+      </div>
+
+      {/* Filters */}
+      <div className="mb-6 flex flex-wrap gap-4">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search name, city, specialties..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-3 text-sm text-slate-900 outline-none transition-all duration-300 placeholder:text-slate-400 focus:border-brand-400 focus:bg-white focus:ring-4 focus:ring-brand-500/15"
+          />
+        </div>
+        <select
+          value={cityFilter}
+          onChange={e => setCityFilter(e.target.value)}
+          className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-2.5 text-sm text-slate-900 outline-none transition-all duration-300 focus:border-brand-400 focus:bg-white focus:ring-4 focus:ring-brand-500/15 min-w-[180px]"
+        >
+          <option value="">All Cities</option>
+          {cities.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {/* Loading / Error / Empty */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 text-center">
+          {error}
+        </div>
+      )}
+      {!loading && !error && filtered.length === 0 && (
+        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white/70 px-6 py-12 text-center">
+          <p className="text-slate-500">No guides found.</p>
+        </div>
+      )}
+
+      {/* Table */}
+      {!loading && !error && filtered.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/50 border-b border-slate-200">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  <th className="px-4 py-3">Guide</th>
+                  <th className="px-4 py-3">City</th>
+                  <th className="px-4 py-3">Rate/Day</th>
+                  <th className="px-4 py-3">Rating</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map(g => (
+                  <tr key={g.Id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-slate-900">{g.FullName}</div>
+                      <div className="text-xs text-slate-500">{g.Email}</div>
+                    </td>
+                    <td className="px-4 py-3 flex items-center gap-1.5 text-slate-600">
+                      <MapPin className="h-3.5 w-3.5 text-brand-500" />
+                      {g.City}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">$ {Number(g.RatePerDay).toFixed(2)}</td>
+                    <td className="px-4 py-3 flex items-center gap-1 text-slate-600">
+                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                      {Number(g.Rating || 0).toFixed(1)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        g.IsActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {g.IsActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link to={`/guides/${g.Id}/edit`} className="p-2 rounded-lg text-slate-500 hover:bg-brand-50 hover:text-brand-600 transition-colors" title="Edit">
+                          <Edit className="h-4 w-4" />
+                        </Link>
+                        <button onClick={() => handleDelete(g.Id)} className="p-2 rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors" title="Delete">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
