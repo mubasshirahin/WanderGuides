@@ -1,13 +1,10 @@
 import { query } from '../config/db.js';
+import AppError from '../utils/AppError.js';
 
 /** GET /api/bookings — placeholder. Join Bookings with Users/Guides here. */
 export const getAllBookings = async (req, res) => {
-  try {
-    // const rows = await query('SELECT * FROM Bookings');
-    res.json({ ok: true, bookings: [] });
-  } catch (err) {
-    res.status(500).json({ ok: false, message: 'Failed to load bookings', error: err.message });
-  }
+  // const rows = await query('SELECT * FROM Bookings');
+  res.json({ ok: true, bookings: [] });
 };
 
 /** POST /api/bookings — placeholder. Validate availability + insert here. */
