@@ -1,6 +1,10 @@
 import { query } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 /** GET /api/auth/health — DB health probe. */
 export const health = async (_req, res) => {
@@ -67,6 +71,26 @@ export const login = async (req, res) => {
     throw new AppError('email and password are required', 400);
   }
 
-  // TODO: look up user, compare hash, sign JWT.
-  res.status(501).json({ ok: false, message: 'Login not implemented yet' });
+  const rows = await query(
+    `SELECT Id, FullName, Email, PasswordHash, Role, Phone, AvatarUrl, Bio, IsActive, CreatedAt, UpdatedAt
+     FROM Users WHERE Email = @email`,
+    { email }
+  );
+
+  if (!rows.length) {
+    throw new AppError('Invalid credentials', 401);
+  }
+
+  const user = rows[0];
+  const match = await bcrypt.compare(password, user.PasswordHash || '');
+  if (!match) throw new AppError('Invalid credentials', 401);
+
+  const payload = { id: user.Id, email: user.Email, role: user.Role };
+  const secret = process.env.JWT_SECRET || 'dev-secret';
+  const token = jwt.sign(payload, secret, { expiresIn: '7d' });
+
+  // Do not leak password hash
+  delete user.PasswordHash;
+
+  res.json({ ok: true, token, user });
 };
