@@ -69,6 +69,9 @@ export async function query(sqlString, params = {}) {
   return result.recordset;
 }
 
+/** Access the shared pool (for statements that return no recordset). */
+export { getPool };
+
 /** Simple health probe: SELECT 1. */
 export async function checkConnection() {
   const pool = await getPool();

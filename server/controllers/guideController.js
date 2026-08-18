@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+import { query, getPool } from '../config/db.js';
 
 /** CREATE — INSERT a new guide */
 export async function createGuide(req, res) {
@@ -154,9 +154,11 @@ export async function deleteGuide(req, res) {
     if (!id) return res.status(400).json({ ok: false, message: 'Invalid ID' });
 
     const sql = `DELETE FROM Guides WHERE Id = @id`;
-    const rows = await query(sql, { id });
+    const result = await getPool().then(p => p.request().input('id', id).query(sql));
 
-    if (!rows.length) return res.status(404).json({ ok: false, message: 'Guide not found' });
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ ok: false, message: 'Guide not found' });
+    }
 
     res.json({ ok: true, message: 'Guide deleted' });
   } catch (err) {
