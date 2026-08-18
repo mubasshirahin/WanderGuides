@@ -50,3 +50,27 @@ CREATE INDEX IX_Bookings_Tourist ON Bookings(TouristUserId);
 CREATE INDEX IX_Bookings_Guide ON Bookings(GuideId);
 CREATE INDEX IX_Bookings_Status ON Bookings(Status);
 
+-- =============================================
+-- Reviews Table Schema
+-- One review per booking enforced by UNIQUE constraint on BookingId
+-- =============================================
+
+CREATE TABLE Reviews (
+    Id           INT IDENTITY PRIMARY KEY,
+    BookingId    INT NOT NULL,
+    TouristUserId INT NOT NULL,
+    GuideId      INT NOT NULL,
+    Rating       TINYINT NOT NULL CHECK (Rating >= 1 AND Rating <= 5),
+    Comment      NVARCHAR(MAX) NULL,
+    CreatedAt    DATETIME2 DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT FK_Reviews_Booking FOREIGN KEY (BookingId) REFERENCES Bookings(Id),
+    CONSTRAINT FK_Reviews_Tourist FOREIGN KEY (TouristUserId) REFERENCES Users(Id),
+    CONSTRAINT FK_Reviews_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id),
+    CONSTRAINT UQ_Reviews_Booking UNIQUE (BookingId)
+);
+
+CREATE INDEX IX_Reviews_Guide ON Reviews(GuideId);
+CREATE INDEX IX_Reviews_Tourist ON Reviews(TouristUserId);
+
+
