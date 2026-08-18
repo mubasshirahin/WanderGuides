@@ -94,3 +94,19 @@ export const login = async (req, res) => {
 
   res.json({ ok: true, token, user });
 };
+
+/** GET /api/auth/me — return profile for authenticated user */
+export const me = async (req, res) => {
+  const userId = req.user && req.user.id;
+  if (!userId) throw new AppError('Unauthorized', 401);
+
+  const rows = await query(
+    `SELECT Id, FullName, Email, Role, Phone, AvatarUrl, Bio, IsActive, CreatedAt, UpdatedAt
+     FROM Users WHERE Id = @id`,
+    { id: userId }
+  );
+
+  if (!rows.length) throw new AppError('User not found', 404);
+
+  res.json({ ok: true, user: rows[0] });
+};
