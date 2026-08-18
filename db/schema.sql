@@ -23,3 +23,30 @@ CREATE INDEX IX_Users_Email ON Users(Email);
 
 -- Index on Role for filtering by account type
 CREATE INDEX IX_Users_Role ON Users(Role);
+
+-- =============================================
+-- Bookings Table Schema
+-- Connects a tourist (User) to a guide (User)
+-- =============================================
+
+CREATE TABLE Bookings (
+    Id            INT IDENTITY PRIMARY KEY,
+    TouristUserId INT NOT NULL,
+    GuideId       INT NOT NULL,
+    StartDate     DATE NOT NULL,
+    EndDate       DATE NOT NULL,
+    Status        NVARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (Status IN ('pending','confirmed','completed','cancelled')),
+    TotalAmount   DECIMAL(10,2) NOT NULL,
+    Notes         NVARCHAR(500) NULL,
+    CreatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT FK_Bookings_Tourist FOREIGN KEY (TouristUserId) REFERENCES Users(Id),
+    CONSTRAINT FK_Bookings_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id),
+    CONSTRAINT CHK_Bookings_Dates CHECK (EndDate >= StartDate)
+);
+
+-- Indexes for common lookups
+CREATE INDEX IX_Bookings_Tourist ON Bookings(TouristUserId);
+CREATE INDEX IX_Bookings_Guide ON Bookings(GuideId);
+CREATE INDEX IX_Bookings_Status ON Bookings(Status);
+
