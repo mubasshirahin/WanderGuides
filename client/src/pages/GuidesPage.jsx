@@ -5,6 +5,16 @@ import PageHeader from '../components/PageHeader.jsx';
 
 const API = '/api/guides';
 
+export function ComingSoon({ icon: Icon, title, message }) {
+  return (
+    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white/70 px-6 py-16 text-center">
+      {Icon && <Icon className="mx-auto h-10 w-10 text-slate-300 mb-4" />}
+      <h3 className="text-lg font-semibold text-slate-700 mb-1">{title}</h3>
+      <p className="text-sm text-slate-500">{message}</p>
+    </div>
+  );
+}
+
 export default function GuidesPage() {
   const [guides, setGuides] = useState([]);
   const [loading, setLoading] = useState(true);
