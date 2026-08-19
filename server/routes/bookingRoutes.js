@@ -6,7 +6,7 @@ import { requireRole } from '../middleware/role.js';
 
 const router = Router();
 
-router.get('/', auth, requireRole('tourist', 'guide'), asyncHandler(getAllBookings));
+router.get('/', auth, requireRole('tourist', 'guide', 'admin'), asyncHandler(getAllBookings));
 router.post('/', auth, requireRole('tourist'), asyncHandler(createBooking));
 
 export default router;

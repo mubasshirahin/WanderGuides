@@ -10,18 +10,21 @@ import BookingsPage from './pages/BookingsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import ProtectedLayout from './components/ProtectedLayout.jsx';
+import { demoLogin, demoLogout } from './lib/demoAuth.js';
 
 export default function App() {
   // Mock auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState(null); // 'tourist' | 'guide' | 'admin'
 
-  const handleLogin = (selectedRole) => {
+  const handleLogin = async (selectedRole) => {
+    await demoLogin(selectedRole);
     setIsAuthenticated(true);
     setRole(selectedRole);
   };
 
   const handleLogout = () => {
+    demoLogout();
     setIsAuthenticated(false);
     setRole(null);
   };

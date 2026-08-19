@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, MapPin, Star, Languages, Loader2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import { authFetch } from '../lib/demoAuth.js';
 
 const API = '/api/guides';
 
@@ -47,7 +48,7 @@ export default function GuidesPage({ role }) {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this guide?')) return;
     try {
-      const res = await fetch(`${API}/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`${API}/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Delete failed');
       setGuides(g => g.filter(g => g.Id !== id));

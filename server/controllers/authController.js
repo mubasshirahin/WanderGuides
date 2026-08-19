@@ -110,3 +110,42 @@ export const me = async (req, res) => {
 
   res.json({ ok: true, user: rows[0] });
 };
+
+/** POST /api/auth/demo-login — issue a JWT for a real demo account of the given role. */
+export const demoLogin = async (req, res) => {
+  const { role } = req.body || {};
+  if (!role || !['tourist', 'guide', 'admin'].includes(role)) {
+    throw new AppError('role must be tourist, guide or admin', 400);
+  }
+
+  if (role === 'admin') {
+    const user = {
+      Id: 999,
+      FullName: 'Demo Admin',
+      Email: 'admin@wander.local',
+      Role: 'admin',
+      IsActive: true,
+    };
+    const payload = { id: user.Id, email: user.Email, role: user.Role };
+    const secret = process.env.JWT_SECRET || 'dev-secret';
+    const token = jwt.sign(payload, secret, { expiresIn: '7d' });
+    return res.json({ ok: true, token, user });
+  }
+
+  const rows = await query(
+    `SELECT TOP 1 Id, FullName, Email, Role, Phone, AvatarUrl, Bio, IsActive
+     FROM Users WHERE Role = @role AND IsActive = 1 ORDER BY Id`,
+    { role }
+  );
+
+  if (!rows.length) {
+    throw new AppError(`No ${role} account found in Users. Seed the database first.`, 404);
+  }
+
+  const user = rows[0];
+  const payload = { id: user.Id, email: user.Email, role: user.Role };
+  const secret = process.env.JWT_SECRET || 'dev-secret';
+  const token = jwt.sign(payload, secret, { expiresIn: '7d' });
+
+  res.json({ ok: true, token, user });
+};
