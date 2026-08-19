@@ -12,7 +12,7 @@ export const getAllBookings = async (req, res) => {
     throw new AppError('Unauthorized', 401);
   }
 
-  if (role !== 'tourist' && role !== 'guide') {
+  if (!['tourist', 'guide', 'admin'].includes(role)) {
     throw new AppError('Forbidden', 403);
   }
 
@@ -26,7 +26,10 @@ export const getAllBookings = async (req, res) => {
     }
   }
 
-  const whereClause = role === 'guide' ? 'b.GuideId = @userId' : 'b.TouristUserId = @userId';
+  const whereClause =
+    role === 'guide' ? 'b.GuideId = @userId'
+    : role === 'tourist' ? 'b.TouristUserId = @userId'
+    : '1=1';
   const sql = `
     SELECT
       b.Id,

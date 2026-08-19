@@ -73,4 +73,31 @@ CREATE TABLE Reviews (
 CREATE INDEX IX_Reviews_Guide ON Reviews(GuideId);
 CREATE INDEX IX_Reviews_Tourist ON Reviews(TouristUserId);
 
+-- =============================================
+-- Guides Table Schema
+-- Standalone guide profiles for the Guide Directory
+-- =============================================
+
+CREATE TABLE Guides (
+    Id          INT IDENTITY PRIMARY KEY,
+    FullName    NVARCHAR(100) NOT NULL,
+    Email       NVARCHAR(150) NOT NULL UNIQUE,
+    Phone       NVARCHAR(30) NULL,
+    City        NVARCHAR(100) NULL,
+    Bio         NVARCHAR(MAX) NULL,
+    Specialties NVARCHAR(255) NULL,
+    Languages   NVARCHAR(255) NULL,
+    RatePerDay  DECIMAL(10,2) NOT NULL DEFAULT 0,
+    Rating      DECIMAL(3,2) NOT NULL DEFAULT 0,
+    IsActive    BIT NOT NULL DEFAULT 1,
+    CreatedAt   DATETIME2 DEFAULT SYSUTCDATETIME(),
+    UpdatedAt   DATETIME2 DEFAULT SYSUTCDATETIME()
+);
+
+-- Index on Email for fast lookups
+CREATE INDEX IX_Guides_Email ON Guides(Email);
+
+-- Index on City for directory filtering
+CREATE INDEX IX_Guides_City ON Guides(City);
+
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { User, Mail, Phone, MapPin, FileText, Tag, Globe, DollarSign, Loader2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import { authFetch } from '../lib/demoAuth.js';
 
 const inputBase =
   'w-full rounded-xl border border-slate-200 bg-slate-50/60 py-3 pl-11 pr-3 text-sm text-slate-900 outline-none transition-all duration-300 placeholder:text-slate-400 focus:border-brand-400 focus:bg-white focus:ring-4 focus:ring-brand-500/15';
@@ -84,9 +85,8 @@ export default function GuideFormPage() {
     try {
       const url = isEdit ? `/api/guides/${id}` : '/api/guides';
       const method = isEdit ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
           ratePerDay: Number(form.ratePerDay),
