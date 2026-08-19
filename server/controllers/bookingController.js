@@ -1,13 +1,67 @@
 import { query } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 
-/** GET /api/bookings — placeholder. Join Bookings with Users/Guides here. */
+const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'completed', 'cancelled']);
+
+/** GET /api/bookings - list bookings for the authenticated tourist or guide. */
 export const getAllBookings = async (req, res) => {
-  // const rows = await query('SELECT * FROM Bookings');
-  res.json({ ok: true, bookings: [] });
+  const userId = req.user && req.user.id;
+  const role = req.user && req.user.role;
+
+  if (!userId) {
+    throw new AppError('Unauthorized', 401);
+  }
+
+  if (role !== 'tourist' && role !== 'guide') {
+    throw new AppError('Forbidden', 403);
+  }
+
+  const { status } = req.query || {};
+  let normalizedStatus = null;
+
+  if (status !== undefined) {
+    normalizedStatus = String(status).trim().toLowerCase();
+    if (!ALLOWED_STATUSES.has(normalizedStatus)) {
+      throw new AppError('Invalid status filter', 400);
+    }
+  }
+
+  const whereClause = role === 'guide' ? 'b.GuideId = @userId' : 'b.TouristUserId = @userId';
+  const sql = `
+    SELECT
+      b.Id,
+      b.TouristUserId,
+      b.GuideId,
+      b.StartDate,
+      b.EndDate,
+      b.Status,
+      b.TotalAmount,
+      b.Notes,
+      b.CreatedAt,
+      tourist.FullName AS TouristName,
+      tourist.Email AS TouristEmail,
+      guide.FullName AS GuideName,
+      guide.Email AS GuideEmail,
+      guide.Phone AS GuidePhone,
+      guide.AvatarUrl AS GuideAvatarUrl,
+      guide.Bio AS GuideBio
+    FROM Bookings b
+    INNER JOIN Users tourist ON tourist.Id = b.TouristUserId
+    INNER JOIN Users guide ON guide.Id = b.GuideId
+    WHERE ${whereClause}
+      AND (@status IS NULL OR b.Status = @status)
+    ORDER BY b.CreatedAt DESC, b.Id DESC
+  `;
+
+  const bookings = await query(sql, {
+    userId,
+    status: normalizedStatus,
+  });
+
+  res.json({ ok: true, bookings });
 };
 
-/** POST /api/bookings — placeholder. Validate availability + insert here. */
+/** POST /api/bookings - placeholder. Validate availability + insert here. */
 export const createBooking = async (req, res) => {
   const { guideId, startDate, endDate, notes } = req.body || {};
 
