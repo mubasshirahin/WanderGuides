@@ -11,7 +11,7 @@ router.post('/', auth, requireRole('guide', 'admin'), asyncHandler(createGuide))
 router.get('/', asyncHandler(listGuides));             // READ all (with filters)
 router.get('/:id/reviews', asyncHandler(getGuideReviews)); // READ public guide reviews
 router.get('/:id', asyncHandler(getGuide));            // READ one
-router.patch('/:id', asyncHandler(updateGuide));       // UPDATE
-router.delete('/:id', asyncHandler(deleteGuide));      // DELETE
+router.patch('/:id', auth, requireRole('guide', 'admin'), asyncHandler(updateGuide));       // UPDATE
+router.delete('/:id', auth, requireRole('admin'), asyncHandler(deleteGuide));      // DELETE
 
 export default router;
