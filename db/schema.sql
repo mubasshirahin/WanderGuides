@@ -257,6 +257,39 @@ CREATE INDEX IX_GRoT_Tourist ON GuideReviewsOfTourists(TouristID);
 CREATE INDEX IX_GRoT_Guide   ON GuideReviewsOfTourists(GuideID);
 
 -- =============================================
+-- GuideTours Table Schema
+-- Stores tour packages created by guide user accounts.
+-- =============================================
+
+CREATE TABLE GuideTours (
+    Id            INT IDENTITY PRIMARY KEY,
+    GuideId       INT NOT NULL,
+    Title         NVARCHAR(150) NOT NULL,
+    Description   NVARCHAR(MAX) NULL,
+    Location      NVARCHAR(150) NULL,
+    Price         DECIMAL(10,2) NOT NULL,
+    DurationHours INT NOT NULL DEFAULT 8,
+    MaxGroupSize  INT NOT NULL DEFAULT 10,
+    Category      NVARCHAR(100) NULL,
+    Difficulty    NVARCHAR(50) NULL,
+    MeetingPoint  NVARCHAR(255) NULL,
+    Included      NVARCHAR(MAX) NULL,
+    Highlights    NVARCHAR(MAX) NULL,
+    Languages     NVARCHAR(255) NULL,
+    IsActive      BIT NOT NULL DEFAULT 1,
+    CreatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
+    UpdatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT FK_GuideTours_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id),
+    CONSTRAINT CHK_GuideTours_Price CHECK (Price >= 0),
+    CONSTRAINT CHK_GuideTours_Duration CHECK (DurationHours > 0),
+    CONSTRAINT CHK_GuideTours_GroupSize CHECK (MaxGroupSize > 0)
+);
+
+CREATE INDEX IX_GuideTours_Guide ON GuideTours(GuideId);
+CREATE INDEX IX_GuideTours_Active ON GuideTours(IsActive);
+
+-- =============================================
 -- Bids Table Schema
 -- Tourists place custom price offers on a guide's services.
 -- GuideUserID references Users.Id (matches Bookings/Reviews FK convention).
