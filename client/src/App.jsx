@@ -8,7 +8,13 @@ import GuidesPage from './pages/GuidesPage.jsx';
 import GuideFormPage from './pages/GuideFormPage.jsx';
 import BookingsPage from './pages/BookingsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import TouristDashboard from './pages/TouristDashboard.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
+import TouristProfilePage from './pages/TouristProfilePage.jsx';
+import ExplorePage from './pages/ExplorePage.jsx';
+import MessagesPage from './pages/MessagesPage.jsx';
+import CustomTourPage from './pages/CustomTourPage.jsx';
+import ReviewsPage from './pages/ReviewsPage.jsx';
 import ProtectedLayout from './components/ProtectedLayout.jsx';
 import { login, register, googleLogin, logout, getStoredUser, fetchCurrentUser } from './lib/demoAuth.js';
 
@@ -100,8 +106,12 @@ export default function App() {
             {role === 'admin' && <Route path="guides/new" element={<GuideFormPage />} />}
             {role === 'admin' && <Route path="guides/:id/edit" element={<GuideFormPage />} />}
             <Route path="bookings" element={<BookingsPage role={role} />} />
-            <Route path="dashboard" element={<DashboardPage role={role} />} />
-            <Route path="profile" element={<ProfilePage role={role} />} />
+            <Route path="dashboard" element={role === 'tourist' ? <TouristDashboard /> : <DashboardPage role={role} />} />
+            <Route path="explore" element={<ExplorePage role={role} />} />
+            <Route path="messages" element={<MessagesPage role={role} />} />
+            <Route path="custom-tour" element={<CustomTourPage role={role} />} />
+            <Route path="reviews" element={<ReviewsPage role={role} />} />
+            <Route path="profile" element={role === 'tourist' ? <TouristProfilePage /> : <ProfilePage role={role} />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />
