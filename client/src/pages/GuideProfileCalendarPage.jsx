@@ -103,7 +103,7 @@ export default function GuideProfileCalendarPage() {
         });
       }
     }
-  }, [storedUser]);
+  }, [storedUser?.Id]);
 
   useEffect(() => {
     fetchProfile().finally(() => setLoading(false));
