@@ -117,6 +117,22 @@ export const createBooking = async (req, res) => {
 
   const ratePerDay = Number(guideRow.DailyRate) || 0;
 
+  // Check for blocked dates in GuideAvailability
+  const blockedDatesSql = `
+    SELECT BlockedDate FROM GuideAvailability
+    WHERE GuideId = @guideId
+      AND BlockedDate >= @startDate
+      AND BlockedDate <= @endDate
+  `;
+  const blockedDates = await query(blockedDatesSql, { guideId: guideUserId, startDate, endDate });
+  if (blockedDates.length) {
+    const blocked = blockedDates.map(r => r.BlockedDate);
+    throw new AppError(
+      `Guide has blocked these dates: ${blocked.join(', ')}`,
+      409
+    );
+  }
+
   // Check overlapping bookings (pending or confirmed)
   const overlapSql = `
     SELECT Id FROM Bookings
