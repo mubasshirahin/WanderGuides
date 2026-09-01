@@ -375,7 +375,7 @@ export async function deleteGuide(req, res) {
  * HAVING clause filters groups after aggregation (unlike WHERE which filters rows).
  */
 export async function getTopRatedGuides(req, res) {
-  const minReviews = Number(req.query.minReviews) || 2;
+  const minReviews = Number(req.query.minReviews) || 1;
 
   const rows = await query(
     `SELECT
