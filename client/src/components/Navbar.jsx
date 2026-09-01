@@ -42,8 +42,8 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
     <header
       className={`sticky top-0 z-50 transition-all duration-500 ${
         scrolled
-          ? 'border-b border-slate-200/70 bg-white/85 shadow-[0_8px_30px_-12px_rgba(6,10,20,0.15)] backdrop-blur-xl'
-          : 'border-b border-transparent bg-white/40 backdrop-blur-md'
+          ? 'border-b border-white/10 bg-ink-950/90 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)] backdrop-blur-xl'
+          : 'border-b border-transparent bg-ink-950/60 backdrop-blur-md'
       }`}
     >
       <span
@@ -59,8 +59,8 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
               <span className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/25 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
               <Compass className="h-5 w-5" />
             </span>
-            <span className="font-display text-lg font-bold tracking-tight text-slate-900">
-              Wander<span className="text-gradient-dark">Guides</span>
+            <span className="font-display text-lg font-bold tracking-tight text-white">
+              Wander<span className="text-gradient">Guides</span>
             </span>
           </Link>
 
@@ -73,13 +73,13 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
                 className={({ isActive }) =>
                   `group relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-300 after:absolute after:inset-x-3 after:-bottom-0.5 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:bg-gradient-to-r after:from-brand-500 after:to-teal-500 after:transition-transform after:duration-300 hover:after:scale-x-100 ${
                     isActive
-                      ? 'text-brand-700 after:scale-x-100'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'text-brand-400 after:scale-x-100'
+                      : 'text-slate-400 hover:text-white'
                   }`
                 }
               >
                 {Icon && (
-                  <Icon className="h-4 w-4 text-slate-400 transition-colors duration-300 group-hover:text-brand-500" />
+                  <Icon className="h-4 w-4 text-slate-500 transition-colors duration-300 group-hover:text-brand-400" />
                 )}
                 {label}
               </NavLink>
@@ -91,7 +91,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
             {isAuthenticated ? (
               <button
                 onClick={onLogout}
-                className="btn-sheen inline-flex items-center gap-2 rounded-xl bg-ink-900 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-ink-900/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-ink-800 hover:shadow-xl"
+                className="btn-sheen inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15"
               >
                 <LogOut className="h-4 w-4" />
                 Logout
@@ -100,7 +100,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
               <>
                 <Link
                   to="/auth"
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 transition-colors duration-300 hover:text-brand-700"
+                  className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-300 transition-colors duration-300 hover:text-white"
                 >
                   Login
                 </Link>
@@ -117,7 +117,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
           {/* Mobile toggle */}
           <button
             onClick={() => setOpen((o) => !o)}
-            className="rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100 md:hidden"
+            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white md:hidden"
             aria-label="Toggle menu"
           >
             {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -128,7 +128,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
       {/* Mobile menu */}
       <div
         className={`md:hidden overflow-hidden transition-all duration-500 ${
-          open ? 'max-h-96 border-t border-slate-200/70 bg-white/95 backdrop-blur-xl' : 'max-h-0'
+          open ? 'max-h-96 border-t border-white/10 bg-ink-950/95 backdrop-blur-xl' : 'max-h-0'
         }`}
       >
         <div className="px-4 pb-4 pt-3">
@@ -141,8 +141,8 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
                 className={({ isActive }) =>
                   `flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-gradient-to-r from-brand-50 to-teal-50 text-brand-700'
-                      : 'text-slate-600 hover:bg-slate-50'
+                      ? 'bg-gradient-to-r from-brand-500/15 to-teal-500/15 text-brand-400'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
                   }`
                 }
               >
@@ -152,14 +152,14 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
             ))}
           </div>
 
-          <div className="mt-3 border-t border-slate-100 pt-3">
+          <div className="mt-3 border-t border-white/10 pt-3">
             {isAuthenticated ? (
               <button
                 onClick={() => {
                   setOpen(false);
                   onLogout();
                 }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-semibold text-white"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white"
               >
                 <LogOut className="h-4 w-4" />
                 Logout
@@ -169,7 +169,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
                 <Link
                   to="/auth"
                   onClick={() => setOpen(false)}
-                  className="rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-slate-300 hover:bg-white/5 hover:text-white"
                 >
                   Login
                 </Link>
