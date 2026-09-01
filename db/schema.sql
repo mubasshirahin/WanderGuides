@@ -285,4 +285,21 @@ CREATE INDEX IX_Bids_Tourist ON Bids(TouristID);
 CREATE INDEX IX_Bids_Guide   ON Bids(GuideUserID);
 CREATE INDEX IX_Bids_Status  ON Bids(Status);
 
+-- =============================================
+-- GuideAvailability Table Schema
+-- Stores blocked dates for guides' calendars
+-- =============================================
+
+CREATE TABLE GuideAvailability (
+    Id          INT IDENTITY PRIMARY KEY,
+    GuideId     INT NOT NULL,
+    BlockedDate DATE NOT NULL,
+    Reason      NVARCHAR(255) NULL DEFAULT 'Blocked',
+    CreatedAt   DATETIME2 DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT FK_GuideAvailability_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id),
+    CONSTRAINT UQ_GuideAvailability_Date   UNIQUE (GuideId, BlockedDate)
+);
+
+CREATE INDEX IX_GuideAvailability_GuideId ON GuideAvailability(GuideId);
 
