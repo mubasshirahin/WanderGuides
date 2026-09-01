@@ -6,3 +6,9 @@ build/
 .DS_Store
 *.out.log
 *.err.log
+
+# One-time data / seed / migration scripts
+server/scripts/
+db/seed*.sql
+db/cleanup*.sql
+db/aggregate-queries.sql
