@@ -84,10 +84,15 @@ export const createBooking = async (req, res) => {
 
   if (eDate < sDate) throw new AppError('endDate must be on or after startDate', 400);
 
-  // Verify guide exists and get rate
-  const guideRows = await query('SELECT Id, RatePerDay FROM Guides WHERE Id = @id', { id: guideId });
-  if (!guideRows.length) throw new AppError('Guide not found', 404);
-  const ratePerDay = Number(guideRows[0].RatePerDay) || 0;
+  // Verify guide exists and get rate + linked user (Bookings.GuideId -> Users.Id).
+  const guideRow =
+    (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE Id = @id', { id: guideId }))[0] ||
+    (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE UserID = @id', { id: guideId }))[0];
+  if (!guideRow) throw new AppError('Guide not found', 404);
+  const guideUserId = guideRow.UserID;
+  if (!guideUserId) throw new AppError('This guide is not linked to an account yet', 409);
+
+  const ratePerDay = Number(guideRow.DailyRate) || 0;
 
   // Check overlapping bookings (pending or confirmed)
   const overlapSql = `
@@ -96,7 +101,7 @@ export const createBooking = async (req, res) => {
       AND Status IN ('pending','confirmed')
       AND NOT (EndDate < @startDate OR StartDate > @endDate)
   `;
-  const overlapping = await query(overlapSql, { guideId, startDate, endDate });
+  const overlapping = await query(overlapSql, { guideId: guideUserId, startDate, endDate });
   if (overlapping.length) throw new AppError('Guide is already booked for the selected dates', 409);
 
   // Calculate total amount (inclusive days)
@@ -105,14 +110,14 @@ export const createBooking = async (req, res) => {
   const totalAmount = Number((ratePerDay * days).toFixed(2));
 
   const insertSql = `
-    INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes)
-    OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate, INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes, INSERTED.CreatedAt
-    VALUES (@touristId, @guideId, @startDate, @endDate, 'pending', @totalAmount, @notes)
+    INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, BookingType, TotalAmount, FinalPrice, Notes)
+    OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate, INSERTED.EndDate, INSERTED.Status, INSERTED.BookingType, INSERTED.TotalAmount, INSERTED.FinalPrice, INSERTED.Notes, INSERTED.CreatedAt
+    VALUES (@touristId, @guideUserId, @startDate, @endDate, 'pending', 'direct', @totalAmount, @totalAmount, @notes)
   `;
 
   const params = {
     touristId,
-    guideId,
+    guideUserId,
     startDate,
     endDate,
     totalAmount,

@@ -191,7 +191,6 @@ export default function ExplorePage({ role }) {
   const field = (key, setter) => (e) => setter((f) => ({ ...f, [key]: e.target.value }));
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const guideId = selected?.Id;
 
   return (
     <div>
@@ -434,12 +433,7 @@ export default function ExplorePage({ role }) {
             </button>
           </div>
 
-          {guideId && (
-            <p className="mt-3 text-center text-xs text-slate-500">
-              Guide ID: {selected.UserID || selected.Id}
-            </p>
-          )}
-        </Modal>
+          </Modal>
       )}
 
       {/* Direct book modal */}
