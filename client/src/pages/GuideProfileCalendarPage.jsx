@@ -224,12 +224,12 @@ export default function GuideProfileCalendarPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1 block text-xs text-slate-400">Hourly Rate ($)</label>
+                    <label className="mb-1 block text-xs text-slate-400">Hourly Rate (৳)</label>
                     <input type="number" value={form.hourlyRate} onChange={e => setForm(f => ({ ...f, hourlyRate: e.target.value }))}
                       className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-slate-400">Daily Rate ($)</label>
+                    <label className="mb-1 block text-xs text-slate-400">Daily Rate (৳)</label>
                     <input type="number" value={form.dailyRate} onChange={e => setForm(f => ({ ...f, dailyRate: e.target.value }))}
                       className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400" />
                   </div>
