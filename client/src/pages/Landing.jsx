@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MapPin,
@@ -20,7 +21,6 @@ import {
   ChevronRight,
   Play,
 } from 'lucide-react';
-import { mockGuides } from '../data/mockGuides.js';
 import Reveal from '../components/Reveal.jsx';
 import useCountUp from '../hooks/useCountUp.js';
 
@@ -141,6 +141,22 @@ function Stat({ stat, start }) {
 
 export default function Landing({ isAuthenticated }) {
   const ctaTarget = isAuthenticated ? '/guides' : '/auth';
+  const [featuredGuides, setFeaturedGuides] = useState([]);
+  const [topCities, setTopCities] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/guides/explore?pageSize=4')
+      .then(r => r.json())
+      .then(data => { if (data.ok) setFeaturedGuides(data.guides || []); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/guides/top-rated')
+      .then(r => r.json())
+      .then(data => { if (data.ok) setTopCities(data.cities || []); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="overflow-x-clip">
@@ -433,6 +449,71 @@ export default function Landing({ isAuthenticated }) {
         </div>
       </section>
 
+      {/* ================= TOP CITIES (Aggregate Stats) ================= */}
+      {topCities.length > 0 && (
+        <section className="relative overflow-hidden py-20 sm:py-28">
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-2xl text-center">
+              <Reveal>
+                <span className="text-xs font-bold uppercase tracking-[0.3em] text-brand-400">Top Cities</span>
+              </Reveal>
+              <Reveal delay={80}>
+                <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
+                  Most popular <span className="text-gradient">destinations</span>
+                </h2>
+              </Reveal>
+              <Reveal delay={160}>
+                <p className="mx-auto mt-4 max-w-xl text-slate-400">
+                  Real-time stats from our guide community — aggregated across all active guides.
+                </p>
+              </Reveal>
+            </div>
+
+            <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-6">
+              {topCities.map((city, i) => (
+                <Reveal key={city.City} delay={i * 80}>
+                  <div className="group relative h-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl transition-all duration-500 hover:-translate-y-1 hover:border-brand-500/30 hover:bg-white/[0.08]">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-teal-600 text-white shadow-lg shadow-brand-500/20">
+                        <MapPin className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <h3 className="font-display text-lg font-bold text-white">{city.City}</h3>
+                        <p className="text-xs text-slate-400">{city.guideCount} guide{city.guideCount > 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">Avg. Rating</span>
+                        <span className="flex items-center gap-1 text-sm font-semibold text-accent-300">
+                          <Star className="h-3.5 w-3.5 fill-accent-400 text-accent-400" />
+                          {Number(city.avgRating || 0).toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">Avg. Price</span>
+                        <span className="text-sm font-semibold text-emerald-300">
+                          ৳{Number(city.avgDailyRate || 0).toLocaleString()}/day
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">Price Range</span>
+                        <span className="text-xs text-slate-300">
+                          ৳{Number(city.minDailyRate || 0).toLocaleString()} – ৳{Number(city.maxDailyRate || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span className="absolute bottom-0 left-0 h-0.5 w-full origin-left scale-x-0 bg-gradient-to-r from-brand-500 to-teal-500 transition-transform duration-500 group-hover:scale-x-100" />
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ================= TESTIMONIALS ================= */}
       <section className="relative overflow-hidden py-20 sm:py-28">
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -502,13 +583,13 @@ export default function Landing({ isAuthenticated }) {
           </div>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
-            {mockGuides.map((guide, i) => (
-              <Reveal key={guide.id} delay={i * 100}>
+            {featuredGuides.map((guide, i) => (
+              <Reveal key={guide.Id} delay={i * 100}>
                 <div className="group relative h-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] backdrop-blur-xl transition-all duration-500 hover:-translate-y-1 hover:border-brand-500/30 hover:bg-white/[0.1]">
                   <div className="relative h-44 overflow-hidden sm:h-52">
                     <img
-                      src={guide.avatar}
-                      alt={guide.name}
+                      src={guide.AvatarUrl || `https://i.pravatar.cc/200?img=${guide.Id + 10}`}
+                      alt={guide.FullName}
                       loading="lazy"
                       className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
@@ -516,7 +597,7 @@ export default function Landing({ isAuthenticated }) {
 
                     <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur sm:left-4 sm:text-xs">
                       <Sparkles className="h-3 w-3 text-accent-300" />
-                      $ {guide.rate} / day
+                      ৳ {Number(guide.DailyRate || 0).toLocaleString()} / day
                     </span>
 
                     <span className="glass absolute bottom-3 left-3 flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold text-emerald-100 sm:left-4 sm:text-[11px]">
@@ -527,33 +608,33 @@ export default function Landing({ isAuthenticated }) {
 
                   <div className="p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-display text-base font-bold text-white sm:text-lg">{guide.name}</h3>
+                      <h3 className="font-display text-base font-bold text-white sm:text-lg">{guide.FullName}</h3>
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-500/15 px-2 py-0.5 text-[11px] font-semibold text-accent-300 sm:text-xs">
                         <Star className="h-3 w-3 fill-accent-400 text-accent-400 sm:h-3.5 sm:w-3.5" />
-                        {guide.rating}
-                        <span className="text-slate-500">({guide.reviews})</span>
+                        {Number(guide.Rating || 0).toFixed(1)}
+                        <span className="text-slate-500">({guide.TotalReviews || 0})</span>
                       </span>
                     </div>
 
                     <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 sm:text-sm">
                       <MapPin className="h-3 w-3 text-brand-400 sm:h-3.5 sm:w-3.5" />
-                      {guide.city}
+                      {guide.City || 'N/A'}
                     </p>
 
                     <div className="mt-2.5 flex flex-wrap gap-1.5 sm:mt-3">
-                      {guide.specialties.map((s) => (
+                      {(guide.Specialties || '').split(',').filter(Boolean).slice(0, 3).map((s) => (
                         <span
                           key={s}
                           className="rounded-lg border border-brand-500/20 bg-brand-500/10 px-2 py-0.5 text-[11px] font-medium text-brand-300 sm:text-xs"
                         >
-                          {s}
+                          {s.trim()}
                         </span>
                       ))}
                     </div>
 
                     <p className="mt-2.5 flex items-center gap-1 text-[11px] text-slate-500 sm:mt-3 sm:text-xs">
                       <Languages className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                      {guide.languages.join(', ')}
+                      {guide.Languages || 'N/A'}
                     </p>
 
                     <button className="btn-sheen mt-3.5 w-full rounded-xl bg-gradient-to-r from-brand-600 to-teal-600 py-2.5 text-xs font-semibold text-white shadow-md shadow-brand-600/25 transition-all duration-300 hover:shadow-glow sm:mt-4 sm:text-sm">
