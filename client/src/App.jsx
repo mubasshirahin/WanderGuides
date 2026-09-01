@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import Landing from './pages/Landing.jsx';
@@ -22,6 +22,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const storedUser = getStoredUser();
@@ -46,6 +47,7 @@ export default function App() {
     const data = await login(email, password, role);
     setIsAuthenticated(true);
     setRole(data.user.Role);
+    navigate('/dashboard');
     return data;
   };
 
@@ -53,6 +55,7 @@ export default function App() {
     const data = await register(fullName, email, password, role);
     setIsAuthenticated(true);
     setRole(data.user.Role);
+    navigate('/dashboard');
     return data;
   };
 
@@ -60,6 +63,7 @@ export default function App() {
     const data = await googleLogin(credential, role);
     setIsAuthenticated(true);
     setRole(data.user.Role);
+    navigate('/dashboard');
     return data;
   };
 
