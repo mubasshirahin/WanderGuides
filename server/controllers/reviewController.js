@@ -1,82 +1,99 @@
-import { query } from '../config/db.js';
+import { getPool, query } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 
-/**
- * POST /api/reviews
- * Create a review for a completed booking.
- * Works for both tourist→guide and guide→tourist.
- */
-export async function createReview(req, res) {
-  const reviewerId = req.user?.id;
-  if (!reviewerId) throw new AppError('Unauthorized', 401);
+/** POST /api/reviews - submit a tourist review for a completed booking. */
+export function createCreateReview(getPoolFn = getPool) {
+  return async function createReview(req, res) {
+    const touristId = Number(req.user?.id);
+    if (!touristId) throw new AppError('Unauthorized', 401);
+    if (req.user?.role !== 'tourist') throw new AppError('Forbidden', 403);
 
-  const { bookingId, rating, comment } = req.body || {};
-
-  if (!bookingId || rating === undefined) {
-    throw new AppError('bookingId and rating are required', 400);
-  }
-
-  const ratingNum = Number(rating);
-  if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
-    throw new AppError('Rating must be an integer between 1 and 5', 400);
-  }
-
-  const bookingRows = await query(
-    'SELECT Id, TouristUserId, GuideId, Status FROM Bookings WHERE Id = @bookingId',
-    { bookingId }
-  );
-  if (!bookingRows.length) throw new AppError('Booking not found', 404);
-
-  const booking = bookingRows[0];
-
-  if (booking.Status !== 'completed') {
-    throw new AppError('You can only review completed bookings', 400);
-  }
-
-  let reviewerRole = null;
-  let revieweeId = null;
-
-  if (booking.TouristUserId === reviewerId) {
-    reviewerRole = 'tourist';
-    revieweeId = booking.GuideId;
-  } else if (booking.GuideId === reviewerId) {
-    reviewerRole = 'guide';
-    revieweeId = booking.TouristUserId;
-  } else {
-    throw new AppError('You are not part of this booking', 403);
-  }
-
-  const existing = await query(
-    'SELECT Id FROM Reviews WHERE BookingId = @bookingId AND ReviewerId = @reviewerId',
-    { bookingId, reviewerId }
-  );
-  if (existing.length) {
-    throw new AppError('You have already reviewed this booking', 409);
-  }
-
-  const rows = await query(
-    `INSERT INTO Reviews (BookingId, ReviewerId, RevieweeId, ReviewerRole, Rating, Comment)
-     OUTPUT INSERTED.Id, INSERTED.BookingId, INSERTED.ReviewerId, INSERTED.RevieweeId,
-            INSERTED.ReviewerRole, INSERTED.Rating, INSERTED.Comment, INSERTED.CreatedAt
-     VALUES (@bookingId, @reviewerId, @revieweeId, @reviewerRole, @rating, @comment)`,
-    {
-      bookingId,
-      reviewerId,
-      revieweeId,
-      reviewerRole,
-      rating: ratingNum,
-      comment: comment || null,
+    const { bookingId, rating, comment } = req.body || {};
+    const parsedBookingId = Number(bookingId);
+    const ratingNum = Number(rating);
+    if (!Number.isInteger(parsedBookingId) || parsedBookingId <= 0 || rating === undefined) {
+      throw new AppError('bookingId and rating are required', 400);
     }
-  );
+    if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+      throw new AppError('Rating must be an integer between 1 and 5', 400);
+    }
 
-  if (reviewerRole === 'tourist') {
-    await updateGuideRating(revieweeId);
-  } else {
-    await updateTouristRating(revieweeId);
-  }
+    const transaction = (await getPoolFn()).transaction();
+    let transactionStarted = false;
+    try {
+      await transaction.begin();
+      transactionStarted = true;
 
-  res.status(201).json({ ok: true, review: rows[0] });
+    const bookingRequest = transaction.request();
+    bookingRequest.input('bookingId', parsedBookingId);
+    const bookingResult = await bookingRequest.query(
+      `SELECT Id, TouristUserId, GuideId, Status
+       FROM Bookings WITH (UPDLOCK, HOLDLOCK)
+       WHERE Id = @bookingId`
+    );
+    const booking = bookingResult.recordset[0];
+    if (!booking) throw new AppError('Booking not found', 404);
+    if (Number(booking.TouristUserId) !== touristId) throw new AppError('Forbidden', 403);
+    if (String(booking.Status).toLowerCase() !== 'completed') {
+      throw new AppError('You can only review completed bookings', 403);
+    }
+
+    const duplicateRequest = transaction.request();
+    duplicateRequest.input('bookingId', parsedBookingId);
+    const duplicateResult = await duplicateRequest.query(
+      'SELECT Id FROM Reviews WHERE BookingId = @bookingId'
+    );
+    if (duplicateResult.recordset.length) {
+      throw new AppError('You have already reviewed this booking', 409);
+    }
+
+    const insertRequest = transaction.request();
+    insertRequest.input('bookingId', parsedBookingId);
+    insertRequest.input('touristId', touristId);
+    insertRequest.input('guideId', Number(booking.GuideId));
+    insertRequest.input('rating', ratingNum);
+    insertRequest.input('comment', comment || null);
+    const insertResult = await insertRequest.query(
+      `INSERT INTO Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
+       OUTPUT INSERTED.Id, INSERTED.BookingId, INSERTED.TouristUserId,
+              INSERTED.GuideId, INSERTED.Rating, INSERTED.Comment, INSERTED.CreatedAt
+       VALUES (@bookingId, @touristId, @guideId, @rating, @comment)`
+    );
+
+    const ratingRequest = transaction.request();
+    ratingRequest.input('guideId', Number(booking.GuideId));
+    const ratingResult = await ratingRequest.query(
+      `SELECT AVG(CAST(Rating AS DECIMAL(10, 2))) AS AverageRating,
+              COUNT(*) AS ReviewCount
+       FROM Reviews
+       WHERE GuideId = @guideId`
+    );
+    const averageRating = Number(ratingResult.recordset[0]?.AverageRating) || 0;
+    const reviewCount = Number(ratingResult.recordset[0]?.ReviewCount) || 0;
+
+    const updateRequest = transaction.request();
+    updateRequest.input('guideId', Number(booking.GuideId));
+    updateRequest.input('rating', averageRating.toFixed(2));
+    updateRequest.input('reviewCount', reviewCount);
+    await updateRequest.query(
+      `UPDATE Guides
+       SET Rating = @rating, TotalReviews = @reviewCount, UpdatedAt = SYSUTCDATETIME()
+       WHERE UserID = @guideId`
+    );
+
+    await transaction.commit();
+    res.status(201).json({ ok: true, review: insertResult.recordset[0] });
+    } catch (err) {
+      if (transactionStarted) await transaction.rollback().catch(() => {});
+      if (err?.number === 2601 || err?.number === 2627) {
+        throw new AppError('You have already reviewed this booking', 409);
+      }
+      throw err;
+    }
+  };
 }
+
+export const createReview = createCreateReview();
 
 /**
  * GET /api/reviews/user/:userId
