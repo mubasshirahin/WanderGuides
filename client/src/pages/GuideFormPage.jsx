@@ -5,13 +5,13 @@ import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
 
 const inputBase =
-  'w-full rounded-xl border border-slate-200 bg-slate-50/60 py-3 pl-11 pr-3 text-sm text-slate-900 outline-none transition-all duration-300 placeholder:text-slate-400 focus:border-brand-400 focus:bg-white focus:ring-4 focus:ring-brand-500/15';
+  'w-full rounded-xl border border-white/10 bg-white/[0.06] py-3 pl-11 pr-3 text-sm text-white outline-none transition-all duration-300 placeholder:text-slate-500 focus:border-brand-400 focus:bg-white/[0.1] focus:ring-4 focus:ring-brand-500/15';
 
 function Field({ id, label, children, required }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-slate-700">
-        {label} {required && <span className="text-red-500">*</span>}
+      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-slate-300">
+        {label} {required && <span className="text-red-400">*</span>}
       </label>
       {children}
     </div>
@@ -120,43 +120,43 @@ export default function GuideFormPage() {
       />
 
       <div className="mx-auto max-w-2xl">
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+        <form onSubmit={handleSubmit} className="rounded-2xl border border-white/10 bg-white/[0.06] p-6 backdrop-blur-xl space-y-5">
           <Field id="fullName" label="Full Name" required>
             <div className="relative">
-              <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input id="fullName" type="text" value={form.fullName} onChange={set('fullName')} placeholder="John Doe" className={`${inputBase} ${errors.fullName ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15' : ''}`} />
             </div>
-            {errors.fullName && <p className="mt-1 text-xs text-red-500">{errors.fullName}</p>}
+            {errors.fullName && <p className="mt-1 text-xs text-red-400">{errors.fullName}</p>}
           </Field>
 
           <Field id="email" label="Email" required>
             <div className="relative">
-              <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input id="email" type="email" value={form.email} onChange={set('email')} placeholder="john@example.com" className={`${inputBase} ${errors.email ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15' : ''}`} />
             </div>
-            {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
+            {errors.email && <p className="mt-1 text-xs text-red-400">{errors.email}</p>}
           </Field>
 
           <div className="grid gap-5 sm:grid-cols-2">
             <Field id="phone" label="Phone">
               <div className="relative">
-                <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+880 1700-000000" className={inputBase} />
               </div>
             </Field>
 
             <Field id="city" label="City" required>
               <div className="relative">
-                <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input id="city" type="text" value={form.city} onChange={set('city')} placeholder="Hoi An" className={`${inputBase} ${errors.city ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15' : ''}`} />
               </div>
-              {errors.city && <p className="mt-1 text-xs text-red-500">{errors.city}</p>}
+              {errors.city && <p className="mt-1 text-xs text-red-400">{errors.city}</p>}
             </Field>
           </div>
 
           <Field id="bio" label="Bio">
             <div className="relative">
-              <FileText className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
+              <FileText className="pointer-events-none absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
               <textarea
                 id="bio"
                 rows={3}
@@ -171,14 +171,14 @@ export default function GuideFormPage() {
           <div className="grid gap-5 sm:grid-cols-2">
             <Field id="specialties" label="Specialties (comma-separated)">
               <div className="relative">
-                <Tag className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Tag className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input id="specialties" type="text" value={form.specialties} onChange={set('specialties')} placeholder="Heritage Walks, Food Tours" className={inputBase} />
               </div>
             </Field>
 
             <Field id="languages" label="Languages (comma-separated)">
               <div className="relative">
-                <Globe className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Globe className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input id="languages" type="text" value={form.languages} onChange={set('languages')} placeholder="English, Vietnamese" className={inputBase} />
               </div>
             </Field>
@@ -186,7 +186,7 @@ export default function GuideFormPage() {
 
           <Field id="ratePerDay" label="Rate per day (USD)" required>
             <div className="relative">
-              <DollarSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <DollarSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input
                 id="ratePerDay"
                 type="number"
@@ -198,14 +198,14 @@ export default function GuideFormPage() {
                 className={`${inputBase} ${errors.ratePerDay ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15' : ''}`}
               />
             </div>
-            {errors.ratePerDay && <p className="mt-1 text-xs text-red-500">{errors.ratePerDay}</p>}
+            {errors.ratePerDay && <p className="mt-1 text-xs text-red-400">{errors.ratePerDay}</p>}
           </Field>
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={() => navigate('/guides')}
-              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
             >
               Cancel
             </button>

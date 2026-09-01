@@ -33,19 +33,20 @@ const roles = [
 
 export default function AuthPage({ onLogin }) {
   return (
-    <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl items-center justify-center overflow-hidden px-4 py-12 sm:px-6 lg:px-8">
+    <div className="noise relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl items-center justify-center overflow-hidden px-4 py-12 sm:px-6 lg:px-8">
       {/* ambient background */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-32 top-1/4 h-96 w-96 animate-float-slow rounded-full bg-brand-200/40 blur-3xl"
+        className="pointer-events-none absolute -left-32 top-1/4 h-96 w-96 animate-float-slow rounded-full bg-brand-500/15 blur-3xl"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-32 bottom-1/4 h-96 w-96 animate-float-slow rounded-full bg-teal-200/40 blur-3xl [animation-delay:3s]"
+        className="pointer-events-none absolute -right-32 bottom-1/4 h-96 w-96 animate-float-slow rounded-full bg-teal-500/15 blur-3xl [animation-delay:3s]"
       />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-grid-dark" />
 
       <Reveal className="relative w-full max-w-4xl">
-        <div className="grid overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-card-hover sm:grid-cols-2">
+        <div className="grid overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-2xl backdrop-blur-xl sm:grid-cols-2">
           {/* ---------- Brand panel ---------- */}
           <div className="noise relative hidden flex-col justify-between overflow-hidden bg-ink-950 p-10 sm:flex">
             <div
@@ -103,10 +104,10 @@ export default function AuthPage({ onLogin }) {
 
           {/* ---------- Role selection panel ---------- */}
           <div className="flex flex-col justify-center p-8 sm:p-10">
-            <h1 className="font-display text-2xl font-extrabold text-slate-900">
+            <h1 className="font-display text-2xl font-extrabold text-white">
               Choose your role
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-400">
               Select how you'd like to use WanderGuides.
             </p>
 
@@ -115,17 +116,17 @@ export default function AuthPage({ onLogin }) {
                 <button
                   key={key}
                   onClick={() => onLogin(key)}
-                  className={`group w-full text-left rounded-2xl border border-slate-200 bg-white p-5 transition-all duration-300 hover:border-transparent hover:bg-gradient-to-r ${gradient} hover:shadow-lg ${shadow} ${hoverShadow} hover:-translate-y-0.5`}
+                  className={`group w-full text-left rounded-2xl border border-white/10 bg-white/[0.06] p-5 backdrop-blur transition-all duration-300 hover:border-transparent hover:bg-gradient-to-r ${gradient} hover:shadow-lg ${shadow} ${hoverShadow} hover:-translate-y-0.5`}
                 >
                   <div className="flex items-center gap-4">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all duration-300 group-hover:bg-white/20 group-hover:text-white">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/10 text-slate-300 transition-all duration-300 group-hover:bg-white/20 group-hover:text-white">
                       <Icon className="h-6 w-6" />
                     </span>
                     <div>
-                      <h3 className="font-display text-base font-bold text-slate-900 transition-colors duration-300 group-hover:text-white">
+                      <h3 className="font-display text-base font-bold text-white transition-colors duration-300 group-hover:text-white">
                         {label}
                       </h3>
-                      <p className="mt-0.5 text-xs text-slate-500 transition-colors duration-300 group-hover:text-white/80">
+                      <p className="mt-0.5 text-xs text-slate-400 transition-colors duration-300 group-hover:text-white/80">
                         {description}
                       </p>
                     </div>
@@ -134,7 +135,7 @@ export default function AuthPage({ onLogin }) {
               ))}
             </div>
 
-            <p className="mt-8 text-center text-xs text-slate-400">
+            <p className="mt-8 text-center text-xs text-slate-500">
               Demo mode &mdash; any role selection logs you in instantly.
             </p>
           </div>

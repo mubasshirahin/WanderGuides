@@ -2,19 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-slate-50 font-sans text-slate-900 antialiased;
+    @apply bg-ink-950 font-sans text-slate-100 antialiased;
     text-rendering: optimizeLegibility;
   }
 
   ::selection {
-    background: rgba(16, 185, 129, 0.25);
-    color: #064e3b;
+    background: rgba(16, 185, 129, 0.35);
+    color: #ecfdf5;
   }
 
   ::-webkit-scrollbar {
@@ -23,13 +28,13 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: #0b1220;
   }
 
   ::-webkit-scrollbar-thumb {
     background: linear-gradient(180deg, #10b981, #0d9488);
     border-radius: 9999px;
-    border: 2px solid #f1f5f9;
+    border: 2px solid #0b1220;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -40,6 +45,11 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
+    }
+
+    .marquee-track {
+      animation: marquee 40s linear infinite !important;
+      animation-iteration-count: infinite !important;
     }
   }
 }
@@ -133,12 +143,64 @@
     background-size: 44px 44px;
   }
 
-  /* ---------- Marquee pause on hover ---------- */
-  .marquee-track {
-    animation: marquee 36s linear infinite;
+  /* ---------- Premium glass hover glow ---------- */
+  .glass-glow {
+    position: relative;
   }
 
-  .group:hover .marquee-track {
-    animation-play-state: paused;
+  .glass-glow::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(20, 184, 166, 0.2), rgba(245, 158, 11, 0.1));
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    z-index: -1;
+    filter: blur(20px);
+  }
+
+  .glass-glow:hover::before {
+    opacity: 1;
+  }
+
+  /* ---------- Text highlight animation ---------- */
+  .highlight-line {
+    position: relative;
+    display: inline;
+  }
+
+  .highlight-line::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, #10b981, #14b8a6, #f59e0b);
+    border-radius: 2px;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .highlight-line:hover::after {
+    transform: scaleX(1);
+  }
+}
+
+/* ---------- Marquee (outside @layer for max specificity) ---------- */
+.marquee-track {
+  animation: marquee 40s linear infinite;
+  will-change: transform;
+}
+
+.group:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@media (hover: none) {
+  .marquee-track {
+    animation-play-state: running !important;
   }
 }

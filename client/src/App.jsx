@@ -72,15 +72,15 @@ function NotFound() {
     <div className="relative flex min-h-[60vh] flex-col items-center justify-center overflow-hidden px-4 text-center">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-20 top-10 h-64 w-64 animate-float-slow rounded-full bg-brand-100/60 blur-3xl"
+        className="pointer-events-none absolute -left-20 top-10 h-64 w-64 animate-float-slow rounded-full bg-brand-500/15 blur-3xl"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-20 bottom-10 h-64 w-64 animate-float-slow rounded-full bg-teal-100/60 blur-3xl [animation-delay:2s]"
+        className="pointer-events-none absolute -right-20 bottom-10 h-64 w-64 animate-float-slow rounded-full bg-teal-500/15 blur-3xl [animation-delay:2s]"
       />
-      <p className="text-gradient-dark font-display text-7xl font-extrabold">404</p>
-      <h1 className="mt-3 font-display text-2xl font-bold text-slate-900">Page not found</h1>
-      <p className="mt-1 text-slate-500">The page you are looking for doesn&apos;t exist.</p>
+      <p className="text-gradient font-display text-7xl font-extrabold">404</p>
+      <h1 className="mt-3 font-display text-2xl font-bold text-white">Page not found</h1>
+      <p className="mt-1 text-slate-400">The page you are looking for doesn&apos;t exist.</p>
     </div>
   );
 }
