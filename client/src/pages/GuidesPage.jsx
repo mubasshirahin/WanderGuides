@@ -142,7 +142,7 @@ export default function GuidesPage({ role }) {
                       <MapPin className="h-3.5 w-3.5 text-brand-400" />
                       {g.City}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-white">$ {Number(g.RatePerDay).toFixed(2)}</td>
+                    <td className="px-4 py-3 font-semibold text-white">৳ {Number(g.RatePerDay).toFixed(2)}</td>
                     <td className="px-4 py-3 flex items-center gap-1 text-slate-300">
                       <Star className="h-3.5 w-3.5 fill-accent-400 text-accent-400" />
                       {Number(g.Rating || 0).toFixed(1)}

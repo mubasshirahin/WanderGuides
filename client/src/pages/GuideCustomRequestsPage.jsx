@@ -93,10 +93,10 @@ function BidForm({ request, onBidCreated, onClose }) {
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>
       )}
       <p className="text-sm text-slate-400">
-        Tourist budget: <span className="font-semibold text-white">${Number(request.Budget || 0).toFixed(2)}</span>
+        Tourist budget: <span className="font-semibold text-white">৳{Number(request.Budget || 0).toFixed(2)}</span>
       </p>
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-1">Your Offered Price ($)</label>
+        <label className="block text-sm font-medium text-slate-300 mb-1">Your Offered Price (৳)</label>
         <div className="relative">
           <DollarSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <input type="number" min={0} step="0.01" value={offeredPrice} onChange={e => setOfferedPrice(e.target.value)} required
@@ -237,7 +237,7 @@ export default function GuideCustomRequestsPage() {
               <div className="flex items-start justify-between gap-2 mb-3">
                 <h4 className="font-bold text-white text-sm leading-tight">{req.Title}</h4>
                 <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-bold text-amber-400">
-                  ${Number(req.Budget || 0).toFixed(0)}
+                  ৳{Number(req.Budget || 0).toFixed(0)}
                 </span>
               </div>
 
@@ -269,7 +269,7 @@ export default function GuideCustomRequestsPage() {
                 </p>
                 <p className="flex items-center gap-1.5">
                   <DollarSign className="h-3.5 w-3.5 text-brand-400 shrink-0" />
-                  Budget: ${Number(req.Budget || 0).toFixed(2)}
+                  Budget: ৳{Number(req.Budget || 0).toFixed(2)}
                 </p>
               </div>
 

@@ -7,7 +7,7 @@ import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
 
 const currency = (n) =>
-  n == null || Number.isNaN(Number(n)) ? '—' : `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  n == null || Number.isNaN(Number(n)) ? '—' : `\u09F3${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
 // ─── Reusable modal overlay ───────────────────────────────────────────
 function Modal({ onClose, children, maxWidth = 'max-w-lg' }) {
@@ -493,7 +493,7 @@ export default function ExplorePage({ role }) {
           </p>
           <form onSubmit={submitBid} className="mt-5 space-y-4">
             <div>
-              <label className="mb-1 block text-xs text-slate-400">Your offer (USD)</label>
+              <label className="mb-1 block text-xs text-slate-400">Your offer (BDT)</label>
               <div className="relative">
                 <DollarSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input
