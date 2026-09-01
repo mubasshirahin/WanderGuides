@@ -184,7 +184,7 @@ export default function TouristDashboard() {
             <MetricCard icon={CalendarDays} label="Total Bookings" value={stats.totalBookings} color="text-brand-400" />
             <MetricCard icon={Clock} label="Upcoming Tours" value={stats.upcomingTours} color="text-sky-400" />
             <MetricCard icon={CheckCircle} label="Completed" value={stats.completedTours} color="text-emerald-400" />
-            <MetricCard icon={DollarSign} label="Total Spent" value={`$${Number(stats.totalSpent).toFixed(2)}`} color="text-accent-400" />
+            <MetricCard icon={DollarSign} label="Total Spent" value={`৳${Number(stats.totalSpent).toFixed(2)}`} color="text-accent-400" />
           </div>
 
           {/* ─── Priority Banner: Next Upcoming Tour ─────── */}
@@ -275,7 +275,7 @@ function SidebarContent({ user, stats }) {
         <SidebarStat icon={CalendarDays} label="Total Bookings" value={stats.totalBookings} />
         <SidebarStat icon={Clock} label="Upcoming" value={stats.upcomingTours} />
         <SidebarStat icon={CheckCircle} label="Completed" value={stats.completedTours} />
-        <SidebarStat icon={DollarSign} label="Total Spent" value={`$${Number(stats.totalSpent).toFixed(2)}`} />
+        <SidebarStat icon={DollarSign} label="Total Spent" value={`৳${Number(stats.totalSpent).toFixed(2)}`} />
       </div>
     </div>
   );
@@ -334,7 +334,7 @@ function NextTourBanner({ tour, onCancel, cancellingId }) {
         <InfoPill icon={MapPin} label="City" value={tour.GuideCity || 'N/A'} />
         <InfoPill icon={Star} label="Rating" value={tour.GuideRating ? Number(tour.GuideRating).toFixed(1) : 'N/A'} />
         <InfoPill icon={CalendarDays} label="Dates" value={`${formatDate(tour.StartDate)} — ${formatDate(tour.EndDate)}`} />
-        <InfoPill icon={DollarSign} label="Cost" value={`$${Number(tour.TotalAmount).toFixed(2)}`} />
+        <InfoPill icon={DollarSign} label="Cost" value={`৳${Number(tour.TotalAmount).toFixed(2)}`} />
         <InfoPill icon={Clock} label="Status" value={tour.Status} capitalize />
       </div>
 
@@ -445,7 +445,7 @@ function BookingRow({ booking: b, onCancel, cancellingId }) {
 
       {/* Amount */}
       <div className="text-sm font-semibold text-white sm:w-24 sm:text-right">
-        ${Number(b.TotalAmount).toFixed(2)}
+        ৳{Number(b.TotalAmount).toFixed(2)}
       </div>
 
       {/* Actions */}

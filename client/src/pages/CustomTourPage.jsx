@@ -303,7 +303,7 @@ function BidForm({ requestId, budget, onBidCreated, onClose }) {
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>
       )}
       <p className="text-sm text-slate-400">
-        Tourist budget: <span className="font-semibold text-white">${Number(budget).toFixed(2)}</span>
+        Tourist budget: <span className="font-semibold text-white">৳{Number(budget).toFixed(2)}</span>
       </p>
       <div>
         <label className="block text-sm font-medium text-slate-300 mb-1">Your Offered Price ($)</label>
@@ -382,7 +382,7 @@ function TouristView({ addToast }) {
   };
 
   const handleAcceptBid = async (bid) => {
-    if (!window.confirm(`Accept this bid for $${Number(bid.OfferedPrice).toFixed(2)} from ${bid.GuideName}?`)) return;
+    if (!window.confirm(`Accept this bid for ৳${Number(bid.OfferedPrice).toFixed(2)} from ${bid.GuideName}?`)) return;
     try {
       const res = await authFetch(`${API}/bids/${bid.BidID}/accept`, { method: 'PUT' });
       const data = await res.json();
@@ -481,7 +481,7 @@ function TouristView({ addToast }) {
                     </span>
                     <span className="inline-flex items-center gap-1">
                       <DollarSign className="h-3.5 w-3.5 text-brand-400" />
-                      ${Number(req.Budget).toFixed(2)}
+                      ৳{Number(req.Budget).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -553,7 +553,7 @@ function TouristView({ addToast }) {
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-lg font-bold text-brand-400">${Number(bid.OfferedPrice).toFixed(2)}</p>
+                    <p className="text-lg font-bold text-brand-400">৳{Number(bid.OfferedPrice).toFixed(2)}</p>
                   </div>
                 </div>
                 {bid.ProposalMessage && (
@@ -653,13 +653,13 @@ function GuideView({ addToast }) {
   };
 
   const handleAcceptBudget = async (req) => {
-    if (!window.confirm(`Instantly bid at the tourist's budget of $${Number(req.Budget).toFixed(2)}?`)) return;
+    if (!window.confirm(`Instantly bid at the tourist's budget of ৳${Number(req.Budget).toFixed(2)}?`)) return;
     try {
       const res = await authFetch(`${API}/${req.RequestID}/bids`, {
         method: 'POST',
         body: JSON.stringify({
           offeredPrice: Number(req.Budget),
-          proposalMessage: `I accept your proposed budget of $${Number(req.Budget).toFixed(2)}. I am ready to provide an excellent tour experience!`,
+          proposalMessage: `I accept your proposed budget of ৳${Number(req.Budget).toFixed(2)}. I am ready to provide an excellent tour experience!`,
         }),
       });
       const data = await res.json();
@@ -729,7 +729,7 @@ function GuideView({ addToast }) {
               <div className="flex items-start justify-between gap-2 mb-3">
                 <h4 className="font-bold text-white text-sm leading-tight">{req.Title}</h4>
                 <span className="shrink-0 rounded-full bg-brand-500/15 px-2 py-0.5 text-xs font-bold text-brand-400">
-                  ${Number(req.Budget).toFixed(0)}
+                  ৳{Number(req.Budget).toFixed(0)}
                 </span>
               </div>
 
@@ -761,7 +761,7 @@ function GuideView({ addToast }) {
                 </p>
                 <p className="flex items-center gap-1.5">
                   <DollarSign className="h-3.5 w-3.5 text-brand-400 shrink-0" />
-                  Budget: ${Number(req.Budget).toFixed(2)}
+                  Budget: ৳{Number(req.Budget).toFixed(2)}
                 </p>
               </div>
 

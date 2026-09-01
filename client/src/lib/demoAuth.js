@@ -12,7 +12,9 @@ export async function login(email, password, role) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, role }),
   });
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error('Server error — try again'); }
   if (!data.ok) throw new Error(data.message || 'Login failed');
 
   getStorage().setItem(TOKEN_KEY, data.token);
@@ -27,7 +29,9 @@ export async function register(fullName, email, password, role) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fullName, email, password, role }),
   });
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error('Server error — try again'); }
   if (!data.ok) throw new Error(data.message || 'Registration failed');
 
   getStorage().setItem(TOKEN_KEY, data.token);
@@ -42,7 +46,9 @@ export async function googleLogin(credential, role) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ credential, role }),
   });
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error('Server error — try again'); }
   if (!data.ok) throw new Error(data.message || 'Google login failed');
 
   getStorage().setItem(TOKEN_KEY, data.token);
@@ -78,7 +84,9 @@ export async function fetchCurrentUser() {
     const res = await fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { return null; }
     if (!data.ok) {
       logout();
       return null;

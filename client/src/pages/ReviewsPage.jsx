@@ -262,7 +262,7 @@ export default function ReviewsPage() {
                             {new Date(b.StartDate).toLocaleDateString()} — {new Date(b.EndDate).toLocaleDateString()}
                           </p>
                         </div>
-                        <span className="text-xs text-slate-500">${Number(b.TotalAmount).toFixed(2)}</span>
+                        <span className="text-xs text-slate-500">৳{Number(b.TotalAmount).toFixed(2)}</span>
                       </div>
                     </button>
                   ))}

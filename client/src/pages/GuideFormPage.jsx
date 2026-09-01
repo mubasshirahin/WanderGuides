@@ -184,7 +184,7 @@ export default function GuideFormPage() {
             </Field>
           </div>
 
-          <Field id="ratePerDay" label="Rate per day (USD)" required>
+          <Field id="ratePerDay" label="Rate per day (BDT)" required>
             <div className="relative">
               <DollarSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input

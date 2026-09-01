@@ -253,10 +253,10 @@ export default function GuideProfileCalendarPage() {
                 )}
                 <div className="flex items-center gap-4 mt-2">
                   {profile?.HourlyRate && (
-                    <div className="flex items-center gap-1 text-sm"><Clock className="h-3.5 w-3.5 text-amber-400" /><span className="font-bold text-white">${profile.HourlyRate}</span><span className="text-xs text-slate-500">/hr</span></div>
+                    <div className="flex items-center gap-1 text-sm"><Clock className="h-3.5 w-3.5 text-amber-400" /><span className="font-bold text-white">৳{profile.HourlyRate}</span><span className="text-xs text-slate-500">/hr</span></div>
                   )}
                   {(profile?.DailyRate || profile?.RatePerDay) && (
-                    <div className="flex items-center gap-1 text-sm"><DollarSign className="h-3.5 w-3.5 text-emerald-400" /><span className="font-bold text-white">${profile.DailyRate || profile.RatePerDay}</span><span className="text-xs text-slate-500">/day</span></div>
+                    <div className="flex items-center gap-1 text-sm"><DollarSign className="h-3.5 w-3.5 text-emerald-400" /><span className="font-bold text-white">৳{profile.DailyRate || profile.RatePerDay}</span><span className="text-xs text-slate-500">/day</span></div>
                   )}
                 </div>
               </div>

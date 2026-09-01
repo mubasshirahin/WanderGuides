@@ -107,7 +107,7 @@ export default function GuideDashboardPage() {
             <MetricCard
               icon={DollarSign}
               label="Total Earnings"
-              value={`$${Number(dashboard.totalEarnings || 0).toFixed(2)}`}
+              value={`৳${Number(dashboard.totalEarnings || 0).toFixed(2)}`}
               color="text-emerald-400"
             />
             <MetricCard
@@ -164,7 +164,7 @@ export default function GuideDashboardPage() {
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${statusStyles[b.Status] || 'bg-white/10 text-slate-400'}`}>
                           {b.Status}
                         </span>
-                        <span className="text-sm font-bold text-emerald-400">${Number(b.TotalAmount || 0).toFixed(2)}</span>
+                        <span className="text-sm font-bold text-emerald-400">৳{Number(b.TotalAmount || 0).toFixed(2)}</span>
                       </div>
                     </div>
                   ))}
@@ -188,7 +188,7 @@ export default function GuideDashboardPage() {
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <p className="text-sm font-semibold text-white leading-tight">{r.Title || 'Custom Tour'}</p>
                         <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-bold text-amber-400">
-                          ${Number(r.Budget || 0).toFixed(0)}
+                          ৳{Number(r.Budget || 0).toFixed(0)}
                         </span>
                       </div>
                       <p className="text-xs text-slate-400">{r.TouristName || 'Tourist'}</p>

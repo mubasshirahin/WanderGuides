@@ -151,7 +151,7 @@ function CreateTourForm({ onCreated, onClose }) {
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1">Price ($)</label>
+          <label className="block text-sm font-medium text-slate-300 mb-1">Price (৳)</label>
           <div className="relative">
             <DollarSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input name="price" type="number" min={0} step="0.01" value={form.price} onChange={handleChange} required
@@ -380,7 +380,7 @@ export default function MyToursAndBookingsPage() {
                 </p>
                 <p className="flex items-center gap-1.5">
                   <DollarSign className="h-3.5 w-3.5 text-brand-400 shrink-0" />
-                  ${Number(tour.Price || 0).toFixed(2)}
+                  ৳{Number(tour.Price || 0).toFixed(2)}
                 </p>
                 <p className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-brand-400 shrink-0" />
