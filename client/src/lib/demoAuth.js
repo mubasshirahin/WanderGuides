@@ -1,30 +1,63 @@
-const TOKEN_KEY = 'wg_demo_token';
-const USER_KEY = 'wg_demo_user';
+const TOKEN_KEY = 'wg_token';
+const USER_KEY = 'wg_user';
 
-export async function demoLogin(role) {
-  const res = await fetch('/api/auth/demo-login', {
+// ─── Local Login ──────────────────────────────────────────────
+export async function login(email, password, role) {
+  const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role }),
+    body: JSON.stringify({ email, password, role }),
   });
   const data = await res.json();
-  if (!data.ok) throw new Error(data.message || 'Demo login failed');
+  if (!data.ok) throw new Error(data.message || 'Login failed');
 
   localStorage.setItem(TOKEN_KEY, data.token);
   localStorage.setItem(USER_KEY, JSON.stringify(data.user));
   return data;
 }
 
-export function demoLogout() {
+// ─── Local Register ───────────────────────────────────────────
+export async function register(fullName, email, password, role) {
+  const res = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fullName, email, password, role }),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || 'Registration failed');
+
+  localStorage.setItem(TOKEN_KEY, data.token);
+  localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  return data;
+}
+
+// ─── Google Login ─────────────────────────────────────────────
+export async function googleLogin(credential, role) {
+  const res = await fetch('/api/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential, role }),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || 'Google login failed');
+
+  localStorage.setItem(TOKEN_KEY, data.token);
+  localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  return data;
+}
+
+// ─── Logout ───────────────────────────────────────────────────
+export function logout() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
 
+// ─── Get stored token / user ──────────────────────────────────
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-export function getDemoUser() {
+export function getStoredUser() {
   try {
     return JSON.parse(localStorage.getItem(USER_KEY));
   } catch {
@@ -32,6 +65,28 @@ export function getDemoUser() {
   }
 }
 
+// ─── Fetch current user from API ──────────────────────────────
+export async function fetchCurrentUser() {
+  const token = getToken();
+  if (!token) return null;
+
+  try {
+    const res = await fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      logout();
+      return null;
+    }
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    return data.user;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Authenticated fetch helper ───────────────────────────────
 export async function authFetch(url, options = {}) {
   const token = getToken();
   const headers = new Headers(options.headers || {});
