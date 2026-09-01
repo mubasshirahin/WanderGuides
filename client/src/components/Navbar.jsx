@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star } from 'lucide-react';
+import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, Clock } from 'lucide-react';
 
 const loggedOutLinks = [{ to: '/', label: 'Home' }];
 
@@ -14,10 +14,11 @@ const roleLinks = {
     { to: '/profile', label: 'Profile', icon: UserCircle },
   ],
   guide: [
-    { to: '/guides', label: 'My Profile', icon: UserCircle },
-    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/profile', label: 'Profile', icon: UserCircle },
+    { to: '/my-tours', label: 'My Tours', icon: Map },
+    { to: '/custom-requests', label: 'Custom Requests', icon: ClipboardList },
+    { to: '/messages', label: 'Messages', icon: MessageSquare },
+    { to: '/availability', label: 'Calendar', icon: CalendarDays },
   ],
   admin: [
     { to: '/guides', label: 'Manage Guides', icon: Search },
