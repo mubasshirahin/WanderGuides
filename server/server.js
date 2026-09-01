@@ -6,7 +6,14 @@ import './config/db.js'; // boot the pool on startup (fail-soft, see db.js)
 import authRoutes from './routes/authRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 import guideRoutes from './routes/guideRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
+import touristRoutes from './routes/touristRoutes.js';
+import customTourRoutes from './routes/customTourRoutes.js';
+import touristProfileRoutes from './routes/touristProfileRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
+import bidRoutes from './routes/bidRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
+import { initSocket } from './utils/socket.js';
 
 dotenv.config();
 
@@ -20,6 +27,12 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/guides', guideRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/tourist', touristRoutes);
+app.use('/api/custom-tours', customTourRoutes);
+app.use('/api/tourist-profile', touristProfileRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/bids', bidRoutes);
 
 app.get('/', (_req, res) => {
   res.json({ ok: true, name: 'Tourist Guide Hiring Platform API', status: 'running' });
@@ -48,6 +61,8 @@ async function startServer(preferredPort, maxRetries = 5) {
       const bound = srv.address();
       const actualPort = bound && bound.port ? bound.port : port;
       console.log(`[server] API listening on http://localhost:${actualPort}`);
+
+      initSocket(srv);
 
       srv.on('error', (err) => {
         console.error('[server] Server error', err);

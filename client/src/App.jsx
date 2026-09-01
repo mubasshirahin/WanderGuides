@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
@@ -8,26 +8,74 @@ import GuidesPage from './pages/GuidesPage.jsx';
 import GuideFormPage from './pages/GuideFormPage.jsx';
 import BookingsPage from './pages/BookingsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import TouristDashboard from './pages/TouristDashboard.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
+import TouristProfilePage from './pages/TouristProfilePage.jsx';
+import ExplorePage from './pages/ExplorePage.jsx';
+import MessagesPage from './pages/MessagesPage.jsx';
+import CustomTourPage from './pages/CustomTourPage.jsx';
+import ReviewsPage from './pages/ReviewsPage.jsx';
 import ProtectedLayout from './components/ProtectedLayout.jsx';
-import { demoLogin, demoLogout } from './lib/demoAuth.js';
+import { login, register, googleLogin, logout, getStoredUser, fetchCurrentUser } from './lib/demoAuth.js';
 
 export default function App() {
-  // Mock auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [role, setRole] = useState(null); // 'tourist' | 'guide' | 'admin'
+  const [role, setRole] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleLogin = async (selectedRole) => {
-    await demoLogin(selectedRole);
+  useEffect(() => {
+    const storedUser = getStoredUser();
+    if (storedUser) {
+      setIsAuthenticated(true);
+      setRole(storedUser.Role);
+      fetchCurrentUser().then((user) => {
+        if (user) {
+          setRole(user.Role);
+        } else {
+          setIsAuthenticated(false);
+          setRole(null);
+        }
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleLogin = async (email, password, role) => {
+    const data = await login(email, password, role);
     setIsAuthenticated(true);
-    setRole(selectedRole);
+    setRole(data.user.Role);
+    return data;
+  };
+
+  const handleRegister = async (fullName, email, password, role) => {
+    const data = await register(fullName, email, password, role);
+    setIsAuthenticated(true);
+    setRole(data.user.Role);
+    return data;
+  };
+
+  const handleGoogleLogin = async (credential, role) => {
+    const data = await googleLogin(credential, role);
+    setIsAuthenticated(true);
+    setRole(data.user.Role);
+    return data;
   };
 
   const handleLogout = () => {
-    demoLogout();
+    logout();
     setIsAuthenticated(false);
     setRole(null);
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-ink-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -37,15 +85,19 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing isAuthenticated={isAuthenticated} />} />
 
-          {/* Auth page only makes sense when logged out */}
           {!isAuthenticated && (
             <Route
               path="/auth"
-              element={<AuthPage onLogin={handleLogin} />}
+              element={
+                <AuthPage
+                  onLogin={handleLogin}
+                  onRegister={handleRegister}
+                  onGoogleLogin={handleGoogleLogin}
+                />
+              }
             />
           )}
 
-          {/* Protected area — requires login */}
           <Route
             path="/"
             element={<ProtectedLayout isAuthenticated={isAuthenticated} />}
@@ -54,8 +106,12 @@ export default function App() {
             {role === 'admin' && <Route path="guides/new" element={<GuideFormPage />} />}
             {role === 'admin' && <Route path="guides/:id/edit" element={<GuideFormPage />} />}
             <Route path="bookings" element={<BookingsPage role={role} />} />
-            <Route path="dashboard" element={<DashboardPage role={role} />} />
-            <Route path="profile" element={<ProfilePage role={role} />} />
+            <Route path="dashboard" element={role === 'tourist' ? <TouristDashboard /> : <DashboardPage role={role} />} />
+            <Route path="explore" element={<ExplorePage role={role} />} />
+            <Route path="messages" element={<MessagesPage role={role} />} />
+            <Route path="custom-tour" element={<CustomTourPage role={role} />} />
+            <Route path="reviews" element={<ReviewsPage role={role} />} />
+            <Route path="profile" element={role === 'tourist' ? <TouristProfilePage /> : <ProfilePage role={role} />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />
@@ -70,17 +126,9 @@ export default function App() {
 function NotFound() {
   return (
     <div className="relative flex min-h-[60vh] flex-col items-center justify-center overflow-hidden px-4 text-center">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -left-20 top-10 h-64 w-64 animate-float-slow rounded-full bg-brand-100/60 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-20 bottom-10 h-64 w-64 animate-float-slow rounded-full bg-teal-100/60 blur-3xl [animation-delay:2s]"
-      />
-      <p className="text-gradient-dark font-display text-7xl font-extrabold">404</p>
-      <h1 className="mt-3 font-display text-2xl font-bold text-slate-900">Page not found</h1>
-      <p className="mt-1 text-slate-500">The page you are looking for doesn&apos;t exist.</p>
+      <p className="text-gradient font-display text-7xl font-extrabold">404</p>
+      <h1 className="mt-3 font-display text-2xl font-bold text-white">Page not found</h1>
+      <p className="mt-1 text-slate-400">The page you are looking for doesn&apos;t exist.</p>
     </div>
   );
 }
