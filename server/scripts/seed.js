@@ -47,6 +47,23 @@ async function ensureBooking(b) {
   return rows[0].Id;
 }
 
+async function ensureReview(review) {
+  const exists = await query('SELECT Id FROM Reviews WHERE BookingId = @bookingId', {
+    bookingId: review.bookingId,
+  });
+  if (exists.length) return exists[0].Id;
+
+  const rows = await query(
+    `
+      INSERT INTO Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
+      OUTPUT INSERTED.Id
+      VALUES (@bookingId, @touristId, @guideId, @rating, @comment)
+    `,
+    review
+  );
+  return rows[0].Id;
+}
+
 async function run() {
   try {
     console.log('[seed] Starting database seed...');
@@ -84,6 +101,7 @@ async function run() {
       { touristEmail: 'frank@example.com', guideEmail: 'carlos@example.com', startDate: '2026-10-05', endDate: '2026-10-07', totalAmount: 200.00 },
     ];
 
+    const bookingIds = {};
     for (const b of bookings) {
       const bookingObj = {
         touristId: touristIds[b.touristEmail],
@@ -95,7 +113,30 @@ async function run() {
         status: b.status || 'pending',
       };
       const id = await ensureBooking(bookingObj);
+      bookingIds[`${b.touristEmail}:${b.guideEmail}`] = id;
       console.log(`[seed] Booking ensured: ${id} (${b.touristEmail} -> ${b.guideEmail})`);
+    }
+
+    const reviews = [
+      {
+        bookingId: bookingIds['frank@example.com:alice@example.com'],
+        touristId: touristIds['frank@example.com'],
+        guideId: guideIds['alice@example.com'],
+        rating: 5,
+        comment: 'Excellent guide—friendly, knowledgeable, and well organized.',
+      },
+      {
+        bookingId: bookingIds['grace@example.com:bob@example.com'],
+        touristId: touristIds['grace@example.com'],
+        guideId: guideIds['bob@example.com'],
+        rating: 4,
+        comment: 'Great local recommendations and a very enjoyable tour.',
+      },
+    ];
+
+    for (const review of reviews) {
+      const id = await ensureReview(review);
+      console.log(`[seed] Review ensured: ${id} (booking ${review.bookingId})`);
     }
 
     console.log('[seed] Database seed completed.');
