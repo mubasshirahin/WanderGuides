@@ -18,7 +18,7 @@ const roleLinks = {
     { to: '/my-tours', label: 'My Tours', icon: Map },
     { to: '/custom-requests', label: 'Custom Requests', icon: ClipboardList },
     { to: '/messages', label: 'Messages', icon: MessageSquare },
-    { to: '/availability', label: 'Calendar', icon: CalendarDays },
+    { to: '/availability', label: 'Profile', icon: UserCircle },
   ],
   admin: [
     { to: '/guides', label: 'Manage Guides', icon: Search },

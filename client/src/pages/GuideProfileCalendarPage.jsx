@@ -89,10 +89,10 @@ export default function GuideProfileCalendarPage() {
   // Fetch guide profile
   const fetchProfile = useCallback(async () => {
     try {
-      const res = await authFetch('/api/guides/explore?pageSize=1');
+      // Try to get guide by user ID from explore endpoint
+      const res = await authFetch('/api/guides/explore?pageSize=50');
       const data = await res.json();
-      // Find guide matching current user
-      const guide = (data.guides || []).find(g => g.UserID === storedUser?.Id || g.Email === storedUser?.Email);
+      const guide = (data.guides || []).find(g => g.UserID === storedUser?.Id);
       if (guide) {
         setProfile(guide);
         setForm({
@@ -101,10 +101,45 @@ export default function GuideProfileCalendarPage() {
           specialties: guide.Specialties || '',
           languages: guide.Languages || '',
           hourlyRate: guide.HourlyRate || '',
-          dailyRate: guide.DailyRate || '',
+          dailyRate: guide.DailyRate || guide.RatePerDay || '',
+        });
+      } else {
+        // Fallback: use stored user data
+        setProfile({
+          Bio: storedUser?.Bio || '',
+          City: storedUser?.City || '',
+          Specialties: storedUser?.Specialties || '',
+          Languages: storedUser?.Languages || '',
+          HourlyRate: storedUser?.HourlyRate || '',
+          DailyRate: storedUser?.DailyRate || storedUser?.RatePerDay || '',
+          Rating: storedUser?.Rating || 0,
+          TotalReviews: storedUser?.TotalReviews || 0,
+        });
+        setForm({
+          bio: storedUser?.Bio || '',
+          city: storedUser?.City || '',
+          specialties: storedUser?.Specialties || '',
+          languages: storedUser?.Languages || '',
+          hourlyRate: storedUser?.HourlyRate || '',
+          dailyRate: storedUser?.DailyRate || storedUser?.RatePerDay || '',
         });
       }
-    } catch {}
+    } catch {
+      // Use stored user data as fallback
+      if (storedUser) {
+        setProfile({
+          Bio: storedUser.Bio || '', City: storedUser.City || '',
+          Specialties: storedUser.Specialties || '', Languages: storedUser.Languages || '',
+          HourlyRate: storedUser.HourlyRate || '', DailyRate: storedUser.DailyRate || storedUser.RatePerDay || '',
+          Rating: storedUser.Rating || 0, TotalReviews: storedUser.TotalReviews || 0,
+        });
+        setForm({
+          bio: storedUser.Bio || '', city: storedUser.City || '',
+          specialties: storedUser.Specialties || '', languages: storedUser.Languages || '',
+          hourlyRate: storedUser.HourlyRate || '', dailyRate: storedUser.DailyRate || storedUser.RatePerDay || '',
+        });
+      }
+    }
   }, [storedUser]);
 
   // Fetch blocked dates
@@ -115,7 +150,13 @@ export default function GuideProfileCalendarPage() {
       const data = await res.json();
       const dates = new Set();
       (data.blockedDates || []).forEach(d => {
-        const dateStr = typeof d === 'string' ? d : d.BlockedDate || d.BlockedDate;
+        let dateStr = null;
+        if (typeof d === 'string') dateStr = d;
+        else if (d.BlockedDate) {
+          // Handle Date object or ISO string
+          const dt = new Date(d.BlockedDate);
+          dateStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+        }
         if (dateStr) dates.add(dateStr.substring(0, 10));
       });
       setBlockedDates(dates);
