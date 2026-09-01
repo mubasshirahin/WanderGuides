@@ -9,5 +9,6 @@ const router = Router();
 
 router.get('/', auth, requireRole('tourist', 'guide', 'admin'), asyncHandler(getAllBookings));
 router.post('/', auth, requireRole('tourist'), validate(bookingSchema), asyncHandler(createBooking));
+router.post('/direct', auth, requireRole('tourist'), validate(bookingSchema), asyncHandler(createBooking));
 
 export default router;
