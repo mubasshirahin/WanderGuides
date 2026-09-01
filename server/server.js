@@ -12,6 +12,7 @@ import customTourRoutes from './routes/customTourRoutes.js';
 import touristProfileRoutes from './routes/touristProfileRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import bidRoutes from './routes/bidRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import { initSocket } from './utils/socket.js';
 
@@ -33,6 +34,7 @@ app.use('/api/custom-tours', customTourRoutes);
 app.use('/api/tourist-profile', touristProfileRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/bids', bidRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/', (_req, res) => {
   res.json({ ok: true, name: 'Tourist Guide Hiring Platform API', status: 'running' });

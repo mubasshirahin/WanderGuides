@@ -9,14 +9,16 @@ export async function getDashboard(req, res) {
   const userId = req.user?.id;
   if (!userId) throw new AppError('Unauthorized', 401);
 
-  // 1. Aggregated stats
+  // 1. Aggregated stats (includes MIN/MAX aggregate functions)
   const statsRows = await query(
     `SELECT
        COUNT(*) AS totalBookings,
        SUM(CASE WHEN Status IN ('pending','confirmed') THEN 1 ELSE 0 END) AS upcomingTours,
        SUM(CASE WHEN Status = 'completed' THEN 1 ELSE 0 END) AS completedTours,
        SUM(CASE WHEN Status = 'cancelled' THEN 1 ELSE 0 END) AS cancelledTours,
-       ISNULL(SUM(CASE WHEN Status != 'cancelled' THEN TotalAmount ELSE 0 END), 0) AS totalSpent
+       ISNULL(SUM(CASE WHEN Status != 'cancelled' THEN TotalAmount ELSE 0 END), 0) AS totalSpent,
+       MIN(TotalAmount) AS cheapestBooking,
+       MAX(TotalAmount) AS mostExpensiveBooking
      FROM Bookings
      WHERE TouristUserId = @userId`,
     { userId }
@@ -28,6 +30,8 @@ export async function getDashboard(req, res) {
     completedTours: 0,
     cancelledTours: 0,
     totalSpent: 0,
+    cheapestBooking: 0,
+    mostExpensiveBooking: 0,
   };
 
   // 2. Next upcoming tour (earliest pending/confirmed booking)
@@ -78,6 +82,8 @@ export async function getDashboard(req, res) {
         completedTours: Number(stats.completedTours) || 0,
         cancelledTours: Number(stats.cancelledTours) || 0,
         totalSpent: Number(stats.totalSpent) || 0,
+        cheapestBooking: Number(stats.cheapestBooking) || 0,
+        mostExpensiveBooking: Number(stats.mostExpensiveBooking) || 0,
       },
       nextTour,
       bookings: bookingsRows,

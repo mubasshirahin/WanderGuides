@@ -342,3 +342,30 @@ export async function deleteGuide(req, res) {
 
   res.json({ ok: true, message: 'Guide deleted' });
 }
+
+/**
+ * GET /api/guides/top-rated
+ * Returns top-rated guides using GROUP BY + HAVING aggregate filter.
+ * HAVING clause filters groups after aggregation (unlike WHERE which filters rows).
+ */
+export async function getTopRatedGuides(req, res) {
+  const minReviews = Number(req.query.minReviews) || 2;
+
+  const rows = await query(
+    `SELECT
+       g.City,
+       COUNT(*) AS guideCount,
+       AVG(COALESCE(g.DailyRate, g.RatePerDay)) AS avgDailyRate,
+       MIN(COALESCE(g.DailyRate, g.RatePerDay)) AS minDailyRate,
+       MAX(COALESCE(g.DailyRate, g.RatePerDay)) AS maxDailyRate,
+       AVG(g.Rating) AS avgRating
+     FROM Guides g
+     WHERE g.IsActive = 1
+     GROUP BY g.City
+     HAVING COUNT(*) >= @minReviews
+     ORDER BY avgRating DESC`,
+    { minReviews }
+  );
+
+  res.json({ ok: true, cities: rows });
+}
