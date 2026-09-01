@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus } from 'lucide-react';
+import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star } from 'lucide-react';
 
 const loggedOutLinks = [{ to: '/', label: 'Home' }];
 
 const roleLinks = {
   tourist: [
-    { to: '/guides', label: 'Search Guides', icon: Search },
-    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/explore', label: 'Explore', icon: Search },
+    { to: '/messages', label: 'Messages', icon: MessageSquare },
+    { to: '/custom-tour', label: 'Custom Tour', icon: ClipboardList },
+    { to: '/reviews', label: 'Reviews', icon: Star },
     { to: '/profile', label: 'Profile', icon: UserCircle },
   ],
   guide: [
@@ -54,7 +56,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
       <nav className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="group flex items-center gap-2.5" onClick={() => setOpen(false)}>
+          <Link to={isAuthenticated ? '/dashboard' : '/'} className="group flex items-center gap-2.5" onClick={() => setOpen(false)}>
             <span className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-brand-500 via-teal-500 to-accent-500 text-white shadow-lg shadow-brand-500/30 transition-transform duration-500 group-hover:rotate-[8deg]">
               <span className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/25 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
               <Compass className="h-5 w-5" />
@@ -106,7 +108,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
                 </Link>
                 <Link
                   to="/auth?mode=register"
-                  className="btn-sheen inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow"
+                  className="btn-sheen inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 hover:-translate-y-0.5"
                 >
                   Register
                 </Link>
