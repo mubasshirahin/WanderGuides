@@ -69,10 +69,9 @@ function BidForm({ request, onBidCreated, onClose }) {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await authFetch(`/api/guide/custom-requests/${request.RequestID}/requestId/bid`, {
+      const res = await authFetch(`/api/guide/custom-requests/${request.RequestID}/bid`, {
         method: 'POST',
         body: JSON.stringify({
-          requestId: request.RequestID,
           offeredPrice: Number(offeredPrice),
           message: message || undefined,
         }),

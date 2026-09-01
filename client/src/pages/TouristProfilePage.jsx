@@ -94,10 +94,10 @@ export default function TouristProfilePage() {
       const json = await res.json();
       if (!json.ok) throw new Error(json.message || 'Failed to update');
 
-      // Update localStorage user data
+      // Update session storage user data
       if (json.user) {
-        const stored = JSON.parse(localStorage.getItem('wg_user') || '{}');
-        localStorage.setItem('wg_user', JSON.stringify({ ...stored, ...json.user }));
+        const stored = JSON.parse(sessionStorage.getItem('wg_user') || '{}');
+        sessionStorage.setItem('wg_user', JSON.stringify({ ...stored, ...json.user }));
       }
 
       setSuccess('Profile updated successfully!');

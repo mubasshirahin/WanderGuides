@@ -245,9 +245,8 @@ export default function MyToursAndBookingsPage() {
 
   const toggleActive = async (tour) => {
     try {
-      const res = await authFetch(`/api/guide/tours/${tour.Id}/tourId/toggle`, {
+      const res = await authFetch(`/api/guide/tours/${tour.Id}/toggle`, {
         method: 'PUT',
-        body: JSON.stringify({ tourId: tour.Id }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to toggle tour');
@@ -263,9 +262,8 @@ export default function MyToursAndBookingsPage() {
   const deleteTour = async (tour) => {
     if (!window.confirm(`Delete "${tour.Title}"? This cannot be undone.`)) return;
     try {
-      const res = await authFetch(`/api/guide/tours/${tour.Id}/tourId`, {
+      const res = await authFetch(`/api/guide/tours/${tour.Id}`, {
         method: 'DELETE',
-        body: JSON.stringify({ tourId: tour.Id }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to delete tour');
@@ -281,7 +279,7 @@ export default function MyToursAndBookingsPage() {
     setResponsesLoading(true);
     setResponses([]);
     try {
-      const res = await authFetch(`/api/guide/tours/${tour.Id}/tourId/responses`);
+      const res = await authFetch(`/api/guide/tours/${tour.Id}/responses`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to load responses');
       setResponses(data.responses || data.bookings || []);
@@ -294,9 +292,8 @@ export default function MyToursAndBookingsPage() {
 
   const acceptResponse = async (response) => {
     try {
-      const res = await authFetch(`/api/guide/bookings/${response.Id}/bookingId/accept`, {
+      const res = await authFetch(`/api/bookings/${response.Id}/accept`, {
         method: 'PUT',
-        body: JSON.stringify({ bookingId: response.Id }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to accept');
@@ -312,9 +309,8 @@ export default function MyToursAndBookingsPage() {
   const rejectResponse = async (response) => {
     if (!window.confirm('Reject this booking?')) return;
     try {
-      const res = await authFetch(`/api/guide/bookings/${response.Id}/bookingId/reject`, {
+      const res = await authFetch(`/api/bookings/${response.Id}/reject`, {
         method: 'PUT',
-        body: JSON.stringify({ bookingId: response.Id }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to reject');

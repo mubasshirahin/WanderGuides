@@ -6,7 +6,7 @@ export default function MessagesPage({ role }) {
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('wg_user');
+    const stored = sessionStorage.getItem('wg_user');
     if (stored) {
       try {
         setCurrentUser(JSON.parse(stored));

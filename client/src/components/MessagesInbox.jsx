@@ -86,7 +86,7 @@ export default function MessagesInbox({ currentUser }) {
     if (!currentUser?.id) return;
 
     const socket = io(SOCKET_URL, {
-      auth: { token: localStorage.getItem('wg_token') },
+      auth: { token: sessionStorage.getItem('wg_token') },
       transports: ['websocket', 'polling'],
     });
 

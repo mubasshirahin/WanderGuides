@@ -1,6 +1,10 @@
 const TOKEN_KEY = 'wg_token';
 const USER_KEY = 'wg_user';
 
+function getStorage() {
+  return sessionStorage;
+}
+
 // ─── Local Login ──────────────────────────────────────────────
 export async function login(email, password, role) {
   const res = await fetch('/api/auth/login', {
@@ -11,8 +15,8 @@ export async function login(email, password, role) {
   const data = await res.json();
   if (!data.ok) throw new Error(data.message || 'Login failed');
 
-  localStorage.setItem(TOKEN_KEY, data.token);
-  localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  getStorage().setItem(TOKEN_KEY, data.token);
+  getStorage().setItem(USER_KEY, JSON.stringify(data.user));
   return data;
 }
 
@@ -26,8 +30,8 @@ export async function register(fullName, email, password, role) {
   const data = await res.json();
   if (!data.ok) throw new Error(data.message || 'Registration failed');
 
-  localStorage.setItem(TOKEN_KEY, data.token);
-  localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  getStorage().setItem(TOKEN_KEY, data.token);
+  getStorage().setItem(USER_KEY, JSON.stringify(data.user));
   return data;
 }
 
@@ -41,25 +45,25 @@ export async function googleLogin(credential, role) {
   const data = await res.json();
   if (!data.ok) throw new Error(data.message || 'Google login failed');
 
-  localStorage.setItem(TOKEN_KEY, data.token);
-  localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  getStorage().setItem(TOKEN_KEY, data.token);
+  getStorage().setItem(USER_KEY, JSON.stringify(data.user));
   return data;
 }
 
 // ─── Logout ───────────────────────────────────────────────────
 export function logout() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  getStorage().removeItem(TOKEN_KEY);
+  getStorage().removeItem(USER_KEY);
 }
 
 // ─── Get stored token / user ──────────────────────────────────
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return getStorage().getItem(TOKEN_KEY);
 }
 
 export function getStoredUser() {
   try {
-    return JSON.parse(localStorage.getItem(USER_KEY));
+    return JSON.parse(getStorage().getItem(USER_KEY));
   } catch {
     return null;
   }
@@ -79,7 +83,7 @@ export async function fetchCurrentUser() {
       logout();
       return null;
     }
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    getStorage().setItem(USER_KEY, JSON.stringify(data.user));
     return data.user;
   } catch {
     return null;
