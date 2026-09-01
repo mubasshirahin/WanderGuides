@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Search, MapPin, Star, X, Filter, Loader2, Eye, Clock,
-  CalendarDays, CheckCircle, AlertCircle, Gavel, DollarSign, Coins
+  CalendarDays, CheckCircle, AlertCircle, Gavel, DollarSign, Coins, Mail, Phone
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
@@ -72,6 +72,7 @@ export default function ExplorePage({ role }) {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minRating, setMinRating] = useState('0');
+  const [sortBy, setSortBy] = useState('rating');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -101,27 +102,30 @@ export default function ExplorePage({ role }) {
       if (minPrice) params.set('minPrice', minPrice);
       if (maxPrice) params.set('maxPrice', maxPrice);
       if (minRating && Number(minRating) > 0) params.set('minRating', minRating);
+      params.set('sort', sortBy);
       params.set('page', opts.page || page);
       params.set('pageSize', String(pageSize));
 
+      console.log('[Explore] Fetching:', params.toString());
       const res = await fetch(`/api/guides/explore?${params}`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to load guides');
       setGuides(data.guides || []);
       setTotal(data.total || 0);
     } catch (e) {
+      console.error('[Explore] Error:', e);
       setError(e.message);
     } finally {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, keyword, minPrice, maxPrice, minRating]);
+  }, [location, keyword, minPrice, maxPrice, minRating, sortBy]);
 
-  // Debounce keyword; filters trigger immediately.
+  // Debounce keyword; other filters trigger immediately.
   useEffect(() => {
     const t = setTimeout(() => fetchGuides({ page: 1 }), keyword ? 300 : 0);
     return () => clearTimeout(t);
-  }, [fetchGuides, keyword]);
+  }, [fetchGuides, keyword, location, minPrice, maxPrice, minRating, sortBy]);
 
   const openDetail = async (guide) => {
     try {
@@ -214,7 +218,7 @@ export default function ExplorePage({ role }) {
         </div>
       )}
 
-      {/* Top bar: search + mobile filter toggle */}
+      {/* Top bar: search */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -226,25 +230,19 @@ export default function ExplorePage({ role }) {
             className="w-full rounded-xl border border-white/10 bg-white/[0.06] py-2.5 pl-10 pr-3 text-sm text-white outline-none transition-all duration-300 placeholder:text-slate-500 focus:border-brand-400 focus:bg-white/[0.1] focus:ring-4 focus:ring-brand-500/15"
           />
         </div>
-        <button
-          onClick={() => setFilterOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.1]"
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-        </button>
       </div>
 
-      {/* Layout: sidebar (desktop) / grid */}
+      {/* Layout: sidebar + grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        {/* Desktop filters */}
-        <aside className="hidden space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:block">
+        {/* Filters sidebar */}
+        <aside className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Filters</h3>
           <FilterPanel
             location={location} setLocation={setLocation}
             minPrice={minPrice} setMinPrice={setMinPrice}
             maxPrice={maxPrice} setMaxPrice={setMaxPrice}
             minRating={minRating} setMinRating={setMinRating}
+            sortBy={sortBy} setSortBy={setSortBy}
           />
         </aside>
 
@@ -329,6 +327,7 @@ export default function ExplorePage({ role }) {
               minPrice={minPrice} setMinPrice={setMinPrice}
               maxPrice={maxPrice} setMaxPrice={setMaxPrice}
               minRating={minRating} setMinRating={setMinRating}
+              sortBy={sortBy} setSortBy={setSortBy}
             />
             <button
               onClick={() => setFilterOpen(false)}
@@ -373,27 +372,76 @@ export default function ExplorePage({ role }) {
             </div>
           </div>
 
+          {/* Contact Info */}
+          {(selected.Email || selected.Phone) && (
+            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">Contact Information</p>
+              <div className="space-y-1">
+                {selected.Email && (
+                  <p className="flex items-center gap-2 text-sm text-slate-300">
+                    <Mail className="h-3.5 w-3.5 text-brand-400" /> {selected.Email}
+                  </p>
+                )}
+                {selected.Phone && (
+                  <p className="flex items-center gap-2 text-sm text-slate-300">
+                    <Phone className="h-3.5 w-3.5 text-brand-400" /> {selected.Phone}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {selected.Bio && (
             <div className="mt-5">
-              <h4 className="mb-1 text-sm font-semibold text-slate-200">Bio</h4>
+              <h4 className="mb-1 text-sm font-semibold text-slate-200">About</h4>
               <p className="text-sm leading-relaxed text-slate-300">{selected.Bio}</p>
             </div>
           )}
 
           {(selected.Specialties || selected.Languages) && (
-            <div className="mt-5 flex flex-wrap gap-2">
-              {selected.Specialties?.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
-                <span key={i} className="rounded-full bg-brand-500/15 px-3 py-1 text-xs font-medium text-brand-300">
-                  {s}
-                </span>
-              ))}
-              {selected.Languages?.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
-                <span key={`lang-${i}`} className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-slate-300">
-                  {s}
-                </span>
-              ))}
+            <div className="mt-5">
+              <h4 className="mb-2 text-sm font-semibold text-slate-200">Skills & Languages</h4>
+              <div className="flex flex-wrap gap-2">
+                {selected.Specialties?.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
+                  <span key={i} className="rounded-full bg-brand-500/15 px-3 py-1 text-xs font-medium text-brand-300">
+                    {s}
+                  </span>
+                ))}
+                {selected.Languages?.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
+                  <span key={`lang-${i}`} className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-slate-300">
+                    {s}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* Completed Tours */}
+          <div className="mt-5">
+            <div className="flex items-center gap-2 mb-2">
+              <MapPin className="h-4 w-4 text-brand-400" />
+              <h4 className="text-sm font-semibold text-slate-200">
+                {selected.totalCompleted || 0} Tour{(selected.totalCompleted || 0) !== 1 ? 's' : ''} Completed
+              </h4>
+            </div>
+            {selected.recentBookings && selected.recentBookings.length > 0 ? (
+              <div className="space-y-2">
+                {selected.recentBookings.map((b) => (
+                  <div key={b.Id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{b.TourName || 'Tour'}</p>
+                      <p className="text-xs text-slate-400">
+                        {b.TouristName} · {new Date(b.StartDate).toLocaleDateString()} - {new Date(b.EndDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className="ml-3 text-xs font-bold text-brand-400 whitespace-nowrap">{currency(b.FinalPrice || b.TotalAmount)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No completed tours yet.</p>
+            )}
+          </div>
 
           <h4 className="mt-6 mb-3 text-sm font-semibold text-slate-200">
             Customer reviews ({selected.reviews?.length || 0})
@@ -612,9 +660,24 @@ function GuideCard({ guide: g, onView, onBook, onBid, isTourist }) {
 }
 
 // ─── Shared filter panel (desktop sidebar + mobile drawer) ──────────
-function FilterPanel({ location, setLocation, minPrice, setMinPrice, maxPrice, setMaxPrice, minRating, setMinRating }) {
+function FilterPanel({ location, setLocation, minPrice, setMinPrice, maxPrice, setMaxPrice, minRating, setMinRating, sortBy, setSortBy }) {
   return (
     <>
+      <div>
+        <label className="mb-1 block text-xs text-slate-400">Sort by</label>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400"
+        >
+          <option value="rating">Top Rated</option>
+          <option value="reviews">Most Reviews</option>
+          <option value="price_asc">Price: Low to High</option>
+          <option value="price_desc">Price: High to Low</option>
+          <option value="newest">Newest</option>
+        </select>
+      </div>
+
       <div>
         <label className="mb-1 block text-xs text-slate-400">Location / City</label>
         <div className="relative">

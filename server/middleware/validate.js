@@ -89,6 +89,7 @@ export const exploreQuerySchema = z.object({
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
   minRating: z.coerce.number().min(0).max(5).optional(),
+  sort: z.enum(['rating', 'price_asc', 'price_desc', 'reviews', 'newest']).default('rating'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(48).default(12),
 });

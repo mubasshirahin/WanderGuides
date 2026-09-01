@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, Clock } from 'lucide-react';
+import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, Clock, MapPin } from 'lucide-react';
 
 const loggedOutLinks = [{ to: '/', label: 'Home' }];
 
 const roleLinks = {
   tourist: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/explore', label: 'Explore', icon: Search },
+    { to: '/explore', label: 'Explore Guides', icon: Search },
+    { to: '/browse-tours', label: 'Browse Tours', icon: MapPin },
     { to: '/messages', label: 'Messages', icon: MessageSquare },
     { to: '/custom-tour', label: 'Custom Tour', icon: ClipboardList },
     { to: '/reviews', label: 'Reviews', icon: Star },
