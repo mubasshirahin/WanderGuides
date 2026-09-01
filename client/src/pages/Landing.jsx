@@ -145,34 +145,7 @@ export default function Landing({ isAuthenticated }) {
   return (
     <div className="overflow-x-clip">
       {/* ================= HERO ================= */}
-      <section className="noise relative overflow-hidden bg-ink-950 pt-24 pb-20 sm:pt-32 sm:pb-28 lg:pt-40 lg:pb-36">
-        {/* Aurora blobs */}
-        <div aria-hidden="true" className="pointer-events-none absolute -left-40 -top-48 h-[36rem] w-[36rem] animate-float-slow rounded-full bg-brand-500/20 blur-[120px]" />
-        <div aria-hidden="true" className="pointer-events-none absolute -right-32 top-10 h-[30rem] w-[30rem] animate-aurora rounded-full bg-teal-500/20 blur-[120px]" />
-        <div aria-hidden="true" className="pointer-events-none absolute bottom-[-12rem] left-1/3 h-[28rem] w-[28rem] animate-float-slow rounded-full bg-accent-500/10 blur-[120px] [animation-delay:4s]" />
-
-        {/* Grid + vignette */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-grid-dark" />
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(6,10,20,0.85)_100%)]" />
-
-        {/* Twinkling particles */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          {[
-            ['10%', '22%', '0s'],
-            ['78%', '30%', '1.2s'],
-            ['20%', '70%', '0.6s'],
-            ['88%', '68%', '1.8s'],
-            ['55%', '18%', '2.4s'],
-            ['42%', '78%', '3s'],
-          ].map(([left, top, delay], i) => (
-            <span
-              key={i}
-              className="absolute h-1 w-1 animate-twinkle rounded-full bg-emerald-200/80"
-              style={{ left, top, animationDelay: delay }}
-            />
-          ))}
-        </div>
-
+      <section className="relative overflow-hidden bg-ink-950 pt-24 pb-20 sm:pt-32 sm:pb-28 lg:pt-40 lg:pb-36">
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Badge */}
           <Reveal>
@@ -597,11 +570,7 @@ export default function Landing({ isAuthenticated }) {
       {/* ================= CTA BANNER ================= */}
       <section className="px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
         <Reveal>
-          <div className="noise relative mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-ink-950 px-6 py-14 text-center shadow-2xl shadow-ink-950/40 sm:rounded-[2.5rem] sm:px-8 sm:py-20 lg:px-16">
-            <div aria-hidden="true" className="pointer-events-none absolute -left-20 -top-24 h-72 w-72 animate-float-slow rounded-full bg-brand-500/30 blur-[100px]" />
-            <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 -right-20 h-72 w-72 animate-aurora rounded-full bg-teal-500/30 blur-[100px]" />
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-grid-dark" />
-
+          <div className="relative mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-ink-950 px-6 py-14 text-center shadow-2xl shadow-ink-950/40 sm:rounded-[2.5rem] sm:px-8 sm:py-20 lg:px-16">
             <div className="relative">
               <span className="glass mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-brand-300">
                 <ShieldCheck className="h-7 w-7" />
