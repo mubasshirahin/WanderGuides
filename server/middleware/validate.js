@@ -98,6 +98,8 @@ export const guidesQuerySchema = z.object({
   minRating: z.coerce.number().min(0).max(5).optional(),
   maxPrice: z.coerce.number().min(0).max(99999).optional(),
   sort: z.enum(['price_asc', 'price_desc', 'rating']).default('rating'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
 export const directBookingSchema = bookingSchema;
