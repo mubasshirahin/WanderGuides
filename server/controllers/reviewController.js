@@ -21,7 +21,6 @@ export async function createReview(req, res) {
     throw new AppError('Rating must be an integer between 1 and 5', 400);
   }
 
-  // Fetch booking
   const bookingRows = await query(
     'SELECT Id, TouristUserId, GuideId, Status FROM Bookings WHERE Id = @bookingId',
     { bookingId }
@@ -34,7 +33,6 @@ export async function createReview(req, res) {
     throw new AppError('You can only review completed bookings', 400);
   }
 
-  // Determine reviewer role
   let reviewerRole = null;
   let revieweeId = null;
 
@@ -48,7 +46,6 @@ export async function createReview(req, res) {
     throw new AppError('You are not part of this booking', 403);
   }
 
-  // Check if already reviewed
   const existing = await query(
     'SELECT Id FROM Reviews WHERE BookingId = @bookingId AND ReviewerId = @reviewerId',
     { bookingId, reviewerId }
@@ -57,7 +54,6 @@ export async function createReview(req, res) {
     throw new AppError('You have already reviewed this booking', 409);
   }
 
-  // Insert review
   const rows = await query(
     `INSERT INTO Reviews (BookingId, ReviewerId, RevieweeId, ReviewerRole, Rating, Comment)
      OUTPUT INSERTED.Id, INSERTED.BookingId, INSERTED.ReviewerId, INSERTED.RevieweeId,
@@ -73,7 +69,6 @@ export async function createReview(req, res) {
     }
   );
 
-  // Update avg ratings
   if (reviewerRole === 'tourist') {
     await updateGuideRating(revieweeId);
   } else {
@@ -97,12 +92,9 @@ export async function getUserReviews(req, res) {
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
   const offset = (page - 1) * limit;
 
-  // Get user role
   const userRows = await query('SELECT Role FROM Users WHERE Id = @id', { id: userId });
   if (!userRows.length) throw new AppError('User not found', 404);
-  const userRole = userRows[0].Role;
 
-  // Fetch reviews received by this user
   const reviews = await query(
     `SELECT r.Id, r.BookingId, r.Rating, r.Comment, r.CreatedAt,
             reviewer.FullName AS ReviewerName, reviewer.AvatarUrl AS ReviewerAvatar,
@@ -115,14 +107,12 @@ export async function getUserReviews(req, res) {
     { userId, offset, limit }
   );
 
-  // Total count
   const countRows = await query(
     'SELECT COUNT(*) AS total FROM Reviews WHERE RevieweeId = @userId',
     { userId }
   );
   const total = Number(countRows[0]?.total) || 0;
 
-  // Avg rating breakdown
   const avgRows = await query(
     `SELECT
        ISNULL(AVG(CAST(Rating AS DECIMAL(3,2))), 0) AS avgRating,
@@ -211,24 +201,43 @@ export async function getMyGivenReviews(req, res) {
   res.json({ ok: true, reviews });
 }
 
+/**
+ * GET /api/guides/:id/reviews
+ * List public reviews for a guide (tourist→guide reviews).
+ */
+export async function getGuideReviews(req, res) {
+  const guideId = Number(req.params.id);
+  if (!Number.isInteger(guideId) || guideId <= 0) {
+    throw new AppError('Invalid ID', 400);
+  }
+
+  const reviews = await query(
+    `SELECT r.Id, r.Rating, r.Comment, r.CreatedAt,
+            reviewer.FullName AS TouristName, reviewer.AvatarUrl AS TouristAvatarUrl
+     FROM Reviews r
+     INNER JOIN Users reviewer ON reviewer.Id = r.ReviewerId
+     WHERE r.RevieweeId = @guideId AND r.ReviewerRole = 'tourist'
+     ORDER BY r.CreatedAt DESC`,
+    { guideId }
+  );
+
+  res.json({ ok: true, reviews });
+}
+
 /** Helper: recalculate guide average rating */
 async function updateGuideRating(guideUserId) {
-  // GuideId in Guides table is separate from Users.Id
-  // Find the guide record by email
   const userRows = await query('SELECT Email FROM Users WHERE Id = @id', { id: guideUserId });
   if (!userRows.length) return;
 
   const result = await query(
     `SELECT AVG(CAST(r.Rating AS DECIMAL(3,2))) AS AvgRating
      FROM Reviews r
-     INNER JOIN Users u ON u.Id = r.RevieweeId
      WHERE r.RevieweeId = @guideUserId AND r.ReviewerRole = 'tourist'`,
     { guideUserId }
   );
 
   const avgRating = Number(result[0]?.AvgRating) || 0;
 
-  // Update Guides table by email
   await query(
     'UPDATE Guides SET Rating = @rating, UpdatedAt = SYSUTCDATETIME() WHERE Email = @email',
     { rating: Number(avgRating).toFixed(2), email: userRows[0].Email }
