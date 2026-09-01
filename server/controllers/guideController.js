@@ -18,11 +18,20 @@ export async function exploreGuides(req, res) {
     minPrice,
     maxPrice,
     minRating,
+    sort = 'rating',
     page = 1,
     pageSize = 12,
   } = req.query;
 
   const offset = (page - 1) * pageSize;
+
+  const orderBy = {
+    rating: 'g.Rating DESC, g.TotalReviews DESC, g.Id DESC',
+    price_asc: 'COALESCE(g.DailyRate, g.RatePerDay) ASC, g.Id DESC',
+    price_desc: 'COALESCE(g.DailyRate, g.RatePerDay) DESC, g.Id DESC',
+    reviews: 'g.TotalReviews DESC, g.Rating DESC, g.Id DESC',
+    newest: 'g.Id DESC',
+  }[sort] || 'g.Rating DESC, g.TotalReviews DESC, g.Id DESC';
 
   const where = [
     'g.IsActive = 1',
@@ -45,7 +54,7 @@ export async function exploreGuides(req, res) {
       g.HourlyRate, COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate,
       g.Rating, g.TotalReviews, u.AvatarUrl
     ${base}
-    ORDER BY g.Rating DESC, g.TotalReviews DESC, g.Id DESC
+    ORDER BY ${orderBy}
     OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
   `;
   const countSql = `SELECT COUNT(*) AS total ${base}`;
@@ -119,7 +128,33 @@ export async function getGuideEx(req, res) {
   }
   const reviews = await query(reviewsSql, reviewsParams);
 
-  res.json({ ok: true, guide: { ...rows[0], reviews } });
+  // Get completed tour stats and last 5 completed bookings
+  const tourStats = await query(
+    `SELECT COUNT(*) AS totalCompleted
+     FROM Bookings WHERE GuideId = @guideUserID AND Status = 'completed'`,
+    { guideUserID }
+  );
+
+  const recentBookings = await query(
+    `SELECT TOP 5 b.Id, b.Notes AS TourName, b.StartDate, b.EndDate,
+            b.TotalAmount, b.FinalPrice, b.CreatedAt,
+            u.FullName AS TouristName
+     FROM Bookings b
+     INNER JOIN Users u ON u.Id = b.TouristUserId
+     WHERE b.GuideId = @guideUserID AND b.Status = 'completed'
+     ORDER BY b.EndDate DESC`,
+    { guideUserID }
+  );
+
+  res.json({
+    ok: true,
+    guide: {
+      ...rows[0],
+      reviews,
+      totalCompleted: tourStats[0]?.totalCompleted || 0,
+      recentBookings,
+    }
+  });
 }
 
 /** CREATE — INSERT a new guide */
@@ -367,6 +402,73 @@ export async function deleteGuide(req, res) {
   }
 
   res.json({ ok: true, message: 'Guide deleted' });
+}
+
+/**
+ * GET /api/guides/tours/browse
+ * Public list of active tour packages from all guides, with search, filters, and pagination.
+ */
+export async function browseTours(req, res) {
+  const {
+    location,
+    keyword,
+    category,
+    minPrice,
+    maxPrice,
+    difficulty,
+    page = 1,
+    pageSize = 12,
+  } = req.query;
+
+  const offset = (page - 1) * pageSize;
+
+  const where = [
+    'gt.IsActive = 1',
+    'g.IsActive = 1',
+    '(@location IS NULL OR gt.Location LIKE @location)',
+    '(@keyword IS NULL OR (gt.Title LIKE @keyword OR gt.Description LIKE @keyword OR gt.Highlights LIKE @keyword))',
+    '(@category IS NULL OR gt.Category = @category)',
+    '(@difficulty IS NULL OR gt.Difficulty = @difficulty)',
+    '(@minPrice IS NULL OR gt.Price >= @minPrice)',
+    '(@maxPrice IS NULL OR gt.Price <= @maxPrice)',
+  ].join(' AND ');
+
+  const base = `
+    FROM GuideTours gt
+    INNER JOIN Users u ON u.Id = gt.GuideId
+    INNER JOIN Guides g ON g.UserID = u.Id
+    WHERE ${where}
+  `;
+
+  const selectSql = `
+    SELECT
+      gt.Id, gt.Title, gt.Description, gt.Location, gt.Price,
+      gt.DurationHours, gt.MaxGroupSize, gt.Category, gt.Difficulty,
+      gt.MeetingPoint, gt.Included, gt.Highlights, gt.Languages, gt.CreatedAt,
+      g.Id AS GuideProfileId, g.FullName AS GuideName, g.City AS GuideCity,
+      g.Rating AS GuideRating, g.TotalReviews AS GuideReviews, g.HourlyRate, g.DailyRate,
+      u.AvatarUrl AS GuideAvatar
+    ${base}
+    ORDER BY gt.CreatedAt DESC
+    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+  `;
+  const countSql = `SELECT COUNT(*) AS total ${base}`;
+
+  const params = {
+    location: location ? `%${escapeLike(location)}%` : null,
+    keyword: keyword ? `%${escapeLike(keyword)}%` : null,
+    category: category || null,
+    difficulty: difficulty || null,
+    minPrice: minPrice === undefined ? null : Number(minPrice),
+    maxPrice: maxPrice === undefined ? null : Number(maxPrice),
+    offset,
+    pageSize,
+  };
+
+  const [tours, countRow] = await Promise.all([query(selectSql, params), query(countSql, params)]);
+  const total = Number(countRow[0]?.total || 0);
+
+  res.json({ ok: true, tours, page, pageSize, total });
 }
 
 /**

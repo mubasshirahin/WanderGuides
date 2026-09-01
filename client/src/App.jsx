@@ -12,6 +12,7 @@ import TouristDashboard from './pages/TouristDashboard.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import TouristProfilePage from './pages/TouristProfilePage.jsx';
 import ExplorePage from './pages/ExplorePage.jsx';
+import BrowseToursPage from './pages/BrowseToursPage.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
 import CustomTourPage from './pages/CustomTourPage.jsx';
 import ReviewsPage from './pages/ReviewsPage.jsx';
@@ -124,6 +125,7 @@ export default function App({ googleEnabled = false }) {
             <Route path="custom-requests" element={role === 'guide' ? <GuideCustomRequestsPage /> : <CustomTourPage role={role} />} />
             <Route path="availability" element={role === 'guide' ? <GuideProfileCalendarPage /> : <ProfilePage role={role} />} />
             <Route path="explore" element={<ExplorePage role={role} />} />
+            <Route path="browse-tours" element={<BrowseToursPage role={role} />} />
             <Route path="messages" element={<MessagesPage role={role} />} />
             <Route path="custom-tour" element={<CustomTourPage role={role} />} />
             <Route path="reviews" element={<ReviewsPage role={role} />} />

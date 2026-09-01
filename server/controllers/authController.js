@@ -61,6 +61,15 @@ export const register = async (req, res) => {
     });
     const user = rows[0];
 
+    // Auto-create Guides profile for guide users
+    if (role === 'guide') {
+      await query(
+        `INSERT INTO Guides (UserID, FullName, Email, Phone, IsActive)
+         VALUES (@userId, @fullName, @email, @phone, 1)`,
+        { userId: user.Id, fullName, email, phone: phone || null }
+      );
+    }
+
     const payload = { id: user.Id, email: user.Email, role: user.Role };
     const secret = process.env.JWT_SECRET || 'dev-secret';
     const token = jwt.sign(payload, secret, { expiresIn: '7d' });
@@ -254,6 +263,15 @@ export const googleAuth = async (req, res) => {
           }
         );
         user = insertRows[0];
+
+        // Auto-create Guides profile for guide users
+        if (role === 'guide') {
+          await query(
+            `INSERT INTO Guides (UserID, FullName, Email, IsActive)
+             VALUES (@userId, @fullName, @email, 1)`,
+            { userId: user.Id, fullName: user.FullName, email }
+          );
+        }
       }
     }
 
