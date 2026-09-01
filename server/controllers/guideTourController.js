@@ -9,18 +9,23 @@ export async function createTour(req, res) {
   const guideId = req.user?.id;
   if (!guideId) throw new AppError('Unauthorized', 401);
 
-  const { title, description, location, price, durationHours, maxGroupSize } = req.body || {};
+  const { title, description, location, price, durationHours, maxGroupSize,
+    category, difficulty, meetingPoint, included, highlights, languages } = req.body || {};
 
   if (!title || price === undefined) {
     throw new AppError('title and price are required', 400);
   }
 
   const rows = await query(
-    `INSERT INTO GuideTours (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize)
+    `INSERT INTO GuideTours (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize,
+       Category, Difficulty, MeetingPoint, Included, Highlights, Languages)
      OUTPUT INSERTED.Id, INSERTED.Title, INSERTED.Description, INSERTED.Location,
             INSERTED.Price, INSERTED.DurationHours, INSERTED.MaxGroupSize,
+            INSERTED.Category, INSERTED.Difficulty, INSERTED.MeetingPoint,
+            INSERTED.Included, INSERTED.Highlights, INSERTED.Languages,
             INSERTED.IsActive, INSERTED.CreatedAt
-     VALUES (@guideId, @title, @description, @location, @price, @durationHours, @maxGroupSize)`,
+     VALUES (@guideId, @title, @description, @location, @price, @durationHours, @maxGroupSize,
+       @category, @difficulty, @meetingPoint, @included, @highlights, @languages)`,
     {
       guideId,
       title,
@@ -29,6 +34,12 @@ export async function createTour(req, res) {
       price: Number(price),
       durationHours: Number(durationHours) || 8,
       maxGroupSize: Number(maxGroupSize) || 10,
+      category: category || null,
+      difficulty: difficulty || null,
+      meetingPoint: meetingPoint || null,
+      included: included || null,
+      highlights: highlights || null,
+      languages: languages || null,
     }
   );
 
@@ -47,6 +58,7 @@ export async function getMyTours(req, res) {
     `SELECT
        gt.Id, gt.Title, gt.Description, gt.Location, gt.Price,
        gt.DurationHours, gt.MaxGroupSize, gt.IsActive, gt.CreatedAt,
+       gt.Category, gt.Difficulty, gt.MeetingPoint, gt.Included, gt.Highlights, gt.Languages,
        (SELECT COUNT(*) FROM Bookings b WHERE b.GuideId = @guideId AND b.Notes LIKE '%' + gt.Title + '%') AS bookingCount,
        (SELECT COUNT(*) FROM TourBids tb WHERE tb.GuideID = @guideId AND tb.RequestID IN (
          SELECT ctr.RequestID FROM CustomTourRequests ctr WHERE ctr.Title LIKE '%' + gt.Title + '%'
@@ -138,6 +150,61 @@ export async function toggleTour(req, res) {
      OUTPUT INSERTED.Id, INSERTED.Title, INSERTED.IsActive
      WHERE Id = @tourId AND GuideId = @guideId`,
     { tourId, guideId }
+  );
+
+  if (!rows.length) throw new AppError('Tour not found', 404);
+  res.json({ ok: true, tour: rows[0] });
+}
+
+/**
+ * PUT /api/guide/tours/:tourId
+ * Update a tour post.
+ */
+export async function updateTour(req, res) {
+  const guideId = req.user?.id;
+  if (!guideId) throw new AppError('Unauthorized', 401);
+
+  const tourId = Number(req.params.tourId);
+  if (!Number.isInteger(tourId) || tourId <= 0) {
+    throw new AppError('Invalid tour ID', 400);
+  }
+
+  const { title, description, location, price, durationHours, maxGroupSize,
+    category, difficulty, meetingPoint, included, highlights, languages } = req.body || {};
+
+  if (!title || price === undefined) {
+    throw new AppError('title and price are required', 400);
+  }
+
+  const rows = await query(
+    `UPDATE GuideTours
+     SET Title = @title, Description = @description, Location = @location,
+         Price = @price, DurationHours = @durationHours, MaxGroupSize = @maxGroupSize,
+         Category = @category, Difficulty = @difficulty, MeetingPoint = @meetingPoint,
+         Included = @included, Highlights = @highlights, Languages = @languages,
+         UpdatedAt = GETUTCDATE()
+     OUTPUT INSERTED.Id, INSERTED.Title, INSERTED.Description, INSERTED.Location,
+            INSERTED.Price, INSERTED.DurationHours, INSERTED.MaxGroupSize,
+            INSERTED.Category, INSERTED.Difficulty, INSERTED.MeetingPoint,
+            INSERTED.Included, INSERTED.Highlights, INSERTED.Languages,
+            INSERTED.IsActive, INSERTED.CreatedAt
+     WHERE Id = @tourId AND GuideId = @guideId`,
+    {
+      tourId,
+      guideId,
+      title,
+      description: description || null,
+      location: location || null,
+      price: Number(price),
+      durationHours: Number(durationHours) || 8,
+      maxGroupSize: Number(maxGroupSize) || 10,
+      category: category || null,
+      difficulty: difficulty || null,
+      meetingPoint: meetingPoint || null,
+      included: included || null,
+      highlights: highlights || null,
+      languages: languages || null,
+    }
   );
 
   if (!rows.length) throw new AppError('Tour not found', 404);

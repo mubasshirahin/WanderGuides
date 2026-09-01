@@ -4,6 +4,7 @@ import {
   getMyTours,
   getTourResponses,
   toggleTour,
+  updateTour,
   deleteTour,
   getOpenCustomRequests,
   submitBid,
@@ -20,6 +21,7 @@ router.post('/tours', auth, requireRole('guide'), asyncHandler(createTour));
 router.get('/my-tours', auth, requireRole('guide'), asyncHandler(getMyTours));
 router.get('/tours/:tourId/responses', auth, requireRole('guide'), asyncHandler(getTourResponses));
 router.put('/tours/:tourId/toggle', auth, requireRole('guide'), asyncHandler(toggleTour));
+router.put('/tours/:tourId', auth, requireRole('guide'), asyncHandler(updateTour));
 router.delete('/tours/:tourId', auth, requireRole('guide'), asyncHandler(deleteTour));
 router.get('/custom-requests', auth, requireRole('guide'), asyncHandler(getOpenCustomRequests));
 router.post('/custom-requests/:requestId/bid', auth, requireRole('guide'), asyncHandler(submitBid));
