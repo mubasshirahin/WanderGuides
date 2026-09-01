@@ -145,34 +145,7 @@ export default function Landing({ isAuthenticated }) {
   return (
     <div className="overflow-x-clip">
       {/* ================= HERO ================= */}
-      <section className="noise relative overflow-hidden bg-ink-950 pt-24 pb-20 sm:pt-32 sm:pb-28 lg:pt-40 lg:pb-36">
-        {/* Aurora blobs */}
-        <div aria-hidden="true" className="pointer-events-none absolute -left-40 -top-48 h-[36rem] w-[36rem] animate-float-slow rounded-full bg-brand-500/20 blur-[120px]" />
-        <div aria-hidden="true" className="pointer-events-none absolute -right-32 top-10 h-[30rem] w-[30rem] animate-aurora rounded-full bg-teal-500/20 blur-[120px]" />
-        <div aria-hidden="true" className="pointer-events-none absolute bottom-[-12rem] left-1/3 h-[28rem] w-[28rem] animate-float-slow rounded-full bg-accent-500/10 blur-[120px] [animation-delay:4s]" />
-
-        {/* Grid + vignette */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-grid-dark" />
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(6,10,20,0.85)_100%)]" />
-
-        {/* Twinkling particles */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          {[
-            ['10%', '22%', '0s'],
-            ['78%', '30%', '1.2s'],
-            ['20%', '70%', '0.6s'],
-            ['88%', '68%', '1.8s'],
-            ['55%', '18%', '2.4s'],
-            ['42%', '78%', '3s'],
-          ].map(([left, top, delay], i) => (
-            <span
-              key={i}
-              className="absolute h-1 w-1 animate-twinkle rounded-full bg-emerald-200/80"
-              style={{ left, top, animationDelay: delay }}
-            />
-          ))}
-        </div>
-
+      <section className="relative overflow-hidden bg-ink-950 pt-24 pb-20 sm:pt-32 sm:pb-28 lg:pt-40 lg:pb-36">
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Badge */}
           <Reveal>
@@ -366,9 +339,6 @@ export default function Landing({ isAuthenticated }) {
 
       {/* ================= FEATURES GRID ================= */}
       <section className="relative overflow-hidden py-20 sm:py-28">
-        <div aria-hidden="true" className="pointer-events-none absolute -left-40 top-0 h-96 w-96 rounded-full bg-brand-500/10 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -right-40 bottom-0 h-96 w-96 rounded-full bg-teal-500/10 blur-3xl" />
-
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <Reveal>
@@ -391,7 +361,6 @@ export default function Landing({ isAuthenticated }) {
             {features.map(({ icon: Icon, title, desc, gradient }, i) => (
               <Reveal key={title} delay={i * 80}>
                 <div className="group relative h-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl transition-all duration-500 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.08] sm:p-8">
-                  <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" style={{ background: `linear-gradient(135deg, var(--tw-gradient-stops))` }} />
                   <span className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} text-white shadow-lg transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3`}>
                     <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                   </span>
@@ -466,8 +435,6 @@ export default function Landing({ isAuthenticated }) {
 
       {/* ================= TESTIMONIALS ================= */}
       <section className="relative overflow-hidden py-20 sm:py-28">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-40 top-20 h-96 w-96 rounded-full bg-brand-500/10 blur-3xl" />
-
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <Reveal>
@@ -511,8 +478,6 @@ export default function Landing({ isAuthenticated }) {
 
       {/* ================= FEATURED GUIDES ================= */}
       <section className="relative overflow-hidden py-20 sm:py-28">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-40 top-20 h-96 w-96 rounded-full bg-teal-500/10 blur-3xl" />
-
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -605,11 +570,7 @@ export default function Landing({ isAuthenticated }) {
       {/* ================= CTA BANNER ================= */}
       <section className="px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
         <Reveal>
-          <div className="noise relative mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-ink-950 px-6 py-14 text-center shadow-2xl shadow-ink-950/40 sm:rounded-[2.5rem] sm:px-8 sm:py-20 lg:px-16">
-            <div aria-hidden="true" className="pointer-events-none absolute -left-20 -top-24 h-72 w-72 animate-float-slow rounded-full bg-brand-500/30 blur-[100px]" />
-            <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 -right-20 h-72 w-72 animate-aurora rounded-full bg-teal-500/30 blur-[100px]" />
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-grid-dark" />
-
+          <div className="relative mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-ink-950 px-6 py-14 text-center shadow-2xl shadow-ink-950/40 sm:rounded-[2.5rem] sm:px-8 sm:py-20 lg:px-16">
             <div className="relative">
               <span className="glass mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-brand-300">
                 <ShieldCheck className="h-7 w-7" />
