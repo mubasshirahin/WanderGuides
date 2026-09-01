@@ -22,7 +22,7 @@ import GuideProfileCalendarPage from './pages/GuideProfileCalendarPage.jsx';
 import ProtectedLayout from './components/ProtectedLayout.jsx';
 import { login, register, googleLogin, logout, getStoredUser, fetchCurrentUser } from './lib/demoAuth.js';
 
-export default function App() {
+export default function App({ googleEnabled = false }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -101,6 +101,7 @@ export default function App() {
                   onLogin={handleLogin}
                   onRegister={handleRegister}
                   onGoogleLogin={handleGoogleLogin}
+                  googleEnabled={googleEnabled}
                 />
               }
             />

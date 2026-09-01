@@ -205,24 +205,32 @@ export async function getMyGivenReviews(req, res) {
  * GET /api/guides/:id/reviews
  * List public reviews for a guide (tourist→guide reviews).
  */
-export async function getGuideReviews(req, res) {
-  const guideId = Number(req.params.id);
-  if (!Number.isInteger(guideId) || guideId <= 0) {
-    throw new AppError('Invalid ID', 400);
-  }
+/**
+ * Builds the public guide-reviews handler.  Keeping the database function
+ * injectable lets this query be tested without a live SQL Server instance.
+ */
+export function createGetGuideReviews(queryFn = query) {
+  return async function getGuideReviews(req, res) {
+    const guideId = Number(req.params.id);
+    if (!Number.isInteger(guideId) || guideId <= 0) {
+      throw new AppError('Invalid ID', 400);
+    }
 
-  const reviews = await query(
-    `SELECT r.Id, r.Rating, r.Comment, r.CreatedAt,
-            reviewer.FullName AS TouristName, reviewer.AvatarUrl AS TouristAvatarUrl
-     FROM Reviews r
-     INNER JOIN Users reviewer ON reviewer.Id = r.ReviewerId
-     WHERE r.RevieweeId = @guideId AND r.ReviewerRole = 'tourist'
-     ORDER BY r.CreatedAt DESC`,
-    { guideId }
-  );
+    const reviews = await queryFn(
+      `SELECT r.Id, r.Rating, r.Comment, r.CreatedAt,
+              tourist.FullName AS TouristName, tourist.AvatarUrl AS TouristAvatarUrl
+       FROM Reviews r
+       INNER JOIN Users tourist ON tourist.Id = r.TouristUserId
+       WHERE r.GuideId = @guideId
+       ORDER BY r.CreatedAt DESC`,
+      { guideId }
+    );
 
-  res.json({ ok: true, reviews });
+    res.json({ ok: true, reviews });
+  };
 }
+
+export const getGuideReviews = createGetGuideReviews();
 
 /** Helper: recalculate guide average rating */
 async function updateGuideRating(guideUserId) {

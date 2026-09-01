@@ -8,14 +8,18 @@ import './index.css';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+const app = (
+  <AuthProvider>
+    <App googleEnabled={Boolean(GOOGLE_CLIENT_ID)} />
+  </AuthProvider>
+);
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </GoogleOAuthProvider>
+      {GOOGLE_CLIENT_ID ? (
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>{app}</GoogleOAuthProvider>
+      ) : app}
     </BrowserRouter>
   </React.StrictMode>
 );

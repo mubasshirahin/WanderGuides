@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { authFetch } from '../lib/demoAuth.js';
 import { ArrowLeft, Send, Search, MoreVertical, CircleCheck, Circle } from 'lucide-react';
 
-const SOCKET_URL = import.meta.env.DEV ? 'http://localhost:5050' : window.location.origin;
+const SOCKET_URL = import.meta.env.DEV ? 'http://localhost:5000' : window.location.origin;
 
 const formatTime = (value) => {
   if (!value) return '';

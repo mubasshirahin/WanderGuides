@@ -8,7 +8,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       // Proxy API calls to the Express backend during dev.
-      '/api': 'http://localhost:5050',
+      '/api': 'http://localhost:5000',
     },
   },
 });
