@@ -90,7 +90,8 @@ export default function GuideProfileCalendarPage() {
   const fetchProfile = useCallback(async () => {
     try {
       // Try to get guide by user ID from explore endpoint
-      const res = await authFetch('/api/guides/explore?pageSize=50');
+      const res = await authFetch('/api/guides/explore?pageSize=48');
+      if (!res.ok) throw new Error(`Profile fetch failed (${res.status})`);
       const data = await res.json();
       const guide = (data.guides || []).find(g => g.UserID === storedUser?.Id);
       if (guide) {
@@ -140,13 +141,14 @@ export default function GuideProfileCalendarPage() {
         });
       }
     }
-  }, [storedUser]);
+  }, [storedUser?.Id]);
 
   // Fetch blocked dates
   const fetchBlockedDates = useCallback(async () => {
     setCalLoading(true);
     try {
       const res = await authFetch('/api/guide-availability');
+      if (!res.ok) throw new Error(`Availability fetch failed (${res.status})`);
       const data = await res.json();
       const dates = new Set();
       (data.blockedDates || []).forEach(d => {
@@ -161,7 +163,9 @@ export default function GuideProfileCalendarPage() {
       });
       setBlockedDates(dates);
     } catch (err) {
-      setError(err.message);
+      // Don't set global error - show empty calendar instead
+      console.error('Failed to fetch availability:', err.message);
+      setBlockedDates(new Set());
     } finally {
       setCalLoading(false);
     }
