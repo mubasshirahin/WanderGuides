@@ -4,11 +4,12 @@ import { getGuideReviews } from '../controllers/reviewController.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import auth from '../middleware/auth.js';
 import { requireRole } from '../middleware/role.js';
-import { validate, validateQuery, exploreQuerySchema, guideSelfProfileSchema } from '../middleware/validate.js';
+import { validate, validateQuery, exploreQuerySchema, guidesQuerySchema, guideSelfProfileSchema } from '../middleware/validate.js';
 
 const router = Router();
 
 router.post('/', auth, requireRole('guide', 'admin'), asyncHandler(createGuide));           // CREATE (admin/guide)
+router.get('/', validateQuery(guidesQuerySchema), asyncHandler(listGuides));                 // READ public list with filters/sorting
 router.get('/explore', validateQuery(exploreQuerySchema), asyncHandler(exploreGuides));    // READ public explore (search/filter/paginate) — must precede /:id
 router.get('/top-rated', asyncHandler(getTopRatedGuides));    // GET top-rated guides by city (GROUP BY + HAVING)
 router.get('/:id', asyncHandler(getGuideEx));            // READ one (with reviews)

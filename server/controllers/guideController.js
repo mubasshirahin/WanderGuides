@@ -163,38 +163,41 @@ export async function createGuide(req, res) {
 }
 
 /** READ — LIST all guides (with optional filters) */
-export async function listGuides(req, res) {
-  const { city, minRate, maxRate, isActive } = req.query;
-  let sql = `
-    SELECT Id, FullName, Email, Phone, City, Bio, Specialties, Languages,
-           RatePerDay, Rating, IsActive, CreatedAt, UpdatedAt
-    FROM Guides
-    WHERE 1=1
-  `;
-  const params = {};
+export function createListGuides(queryFn = query) {
+  return async function listGuides(req, res) {
+    const { q, minRating, maxPrice, sort = 'rating' } = req.query;
+    const orderBy = {
+      price_asc: 'COALESCE(g.DailyRate, g.RatePerDay) ASC, g.Id DESC',
+      price_desc: 'COALESCE(g.DailyRate, g.RatePerDay) DESC, g.Id DESC',
+      rating: 'g.Rating DESC, g.TotalReviews DESC, g.Id DESC',
+    }[sort] || 'g.Rating DESC, g.TotalReviews DESC, g.Id DESC';
 
-  if (city) {
-    sql += ' AND City = @city';
-    params.city = city;
-  }
-  if (minRate) {
-    sql += ' AND RatePerDay >= @minRate';
-    params.minRate = Number(minRate);
-  }
-  if (maxRate) {
-    sql += ' AND RatePerDay <= @maxRate';
-    params.maxRate = Number(maxRate);
-  }
-  if (isActive !== undefined) {
-    sql += ' AND IsActive = @isActive';
-    params.isActive = isActive === 'true' ? 1 : 0;
-  }
+    const sql = `
+      SELECT g.Id, g.UserID, g.FullName, g.Email, g.Phone, g.City, g.Bio,
+             g.Specialties, g.Languages, g.HourlyRate,
+             COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate,
+             g.Rating, g.TotalReviews, g.IsActive, g.CreatedAt, g.UpdatedAt,
+             u.AvatarUrl
+      FROM Guides g
+      LEFT JOIN Users u ON u.Id = g.UserID
+      WHERE g.IsActive = 1
+        AND (@q IS NULL OR (g.FullName LIKE @q OR g.City LIKE @q OR g.Bio LIKE @q))
+        AND (@minRating IS NULL OR g.Rating >= @minRating)
+        AND (@maxPrice IS NULL OR COALESCE(g.DailyRate, g.RatePerDay) <= @maxPrice)
+      ORDER BY ${orderBy}
+    `;
 
-  sql += ' ORDER BY CreatedAt DESC';
+    const guides = await queryFn(sql, {
+      q: q ? `%${escapeLike(q)}%` : null,
+      minRating: minRating === undefined ? null : Number(minRating),
+      maxPrice: maxPrice === undefined ? null : Number(maxPrice),
+    });
 
-  const rows = await query(sql, params);
-  res.json({ ok: true, guides: rows });
+    res.json({ ok: true, guides });
+  };
 }
+
+export const listGuides = createListGuides();
 
 /** READ ONE — GET guide by ID */
 export async function getGuide(req, res) {
