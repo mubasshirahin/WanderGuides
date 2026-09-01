@@ -143,27 +143,6 @@
     background-size: 44px 44px;
   }
 
-  /* ---------- Premium glass hover glow ---------- */
-  .glass-glow {
-    position: relative;
-  }
-
-  .glass-glow::before {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(20, 184, 166, 0.2), rgba(245, 158, 11, 0.1));
-    opacity: 0;
-    transition: opacity 0.5s ease;
-    z-index: -1;
-    filter: blur(20px);
-  }
-
-  .glass-glow:hover::before {
-    opacity: 1;
-  }
-
   /* ---------- Text highlight animation ---------- */
   .highlight-line {
     position: relative;
