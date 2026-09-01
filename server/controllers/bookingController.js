@@ -2,6 +2,29 @@ import { query } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 
 const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'completed', 'cancelled']);
+const GUIDE_STATUS_UPDATES = new Set(['confirmed', 'completed']);
+const TOURIST_STATUS_UPDATES = new Set(['cancelled']);
+
+function parseBookingId(id) {
+  const bookingId = Number(id);
+  if (!Number.isInteger(bookingId) || bookingId <= 0) {
+    throw new AppError('Invalid booking ID', 400);
+  }
+  return bookingId;
+}
+
+function normalizeStatus(status) {
+  if (typeof status !== 'string') {
+    throw new AppError('status is required', 400);
+  }
+
+  const normalized = status.trim().toLowerCase();
+  if (!ALLOWED_STATUSES.has(normalized)) {
+    throw new AppError('Invalid status', 400);
+  }
+
+  return normalized;
+}
 
 /** GET /api/bookings - list bookings for the authenticated tourist or guide. */
 export const getAllBookings = async (req, res) => {
@@ -132,3 +155,58 @@ export const createBooking = async (req, res) => {
     throw new AppError('Failed to create booking', 500);
   }
 };
+
+export function createUpdateBookingStatus(queryFn = query) {
+  return async function updateBookingStatus(req, res) {
+    const bookingId = parseBookingId(req.params && req.params.id);
+    const userId = req.user && req.user.id;
+    const role = req.user && req.user.role;
+
+    if (!userId) throw new AppError('Unauthorized', 401);
+    if (!['tourist', 'guide'].includes(role)) throw new AppError('Forbidden', 403);
+
+    const status = normalizeStatus(req.body && req.body.status);
+    const rows = await queryFn(
+      'SELECT Id, TouristUserId, GuideId, Status FROM Bookings WHERE Id = @bookingId',
+      { bookingId }
+    );
+    const booking = rows[0];
+
+    if (!booking) throw new AppError('Booking not found', 404);
+
+    if (role === 'guide') {
+      if (!GUIDE_STATUS_UPDATES.has(status)) {
+        throw new AppError("Guides can only set bookings to 'confirmed' or 'completed'", 400);
+      }
+      if (Number(booking.GuideId) !== Number(userId)) {
+        throw new AppError('Forbidden', 403);
+      }
+    }
+
+    if (role === 'tourist') {
+      if (!TOURIST_STATUS_UPDATES.has(status)) {
+        throw new AppError("Tourists can only cancel bookings", 400);
+      }
+      if (Number(booking.TouristUserId) !== Number(userId)) {
+        throw new AppError('Forbidden', 403);
+      }
+      if (!['pending', 'confirmed'].includes(String(booking.Status).toLowerCase())) {
+        throw new AppError('Only pending or confirmed bookings can be cancelled', 400);
+      }
+    }
+
+    const updatedRows = await queryFn(
+      `UPDATE Bookings
+       SET Status = @status
+       OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate,
+              INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes,
+              INSERTED.CreatedAt
+       WHERE Id = @bookingId`,
+      { bookingId, status }
+    );
+
+    res.json({ ok: true, booking: updatedRows[0] });
+  };
+}
+
+export const updateBookingStatus = createUpdateBookingStatus();
