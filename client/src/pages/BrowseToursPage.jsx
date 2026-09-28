@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, MapPin, Star, X, Filter, Loader2, Clock, Users,
-  CalendarDays, CheckCircle, AlertCircle, Mountain, Tag, Compass
+  CalendarDays, CheckCircle, AlertCircle, Mountain, Tag, Compass, MessageCircle
 } from 'lucide-react';
+import { authFetch } from '../lib/demoAuth.js';
+import { startConversation } from '../lib/chat.js';
 import PageHeader from '../components/PageHeader.jsx';
 
 const currency = (n) =>
@@ -63,6 +66,7 @@ const CATEGORIES = ['Cultural', 'Adventure', 'Beach', 'Nature', 'Trekking', 'Foo
 const DIFFICULTIES = ['Easy', 'Moderate', 'Hard'];
 
 export default function BrowseToursPage({ role }) {
+  const navigate = useNavigate();
   const [tours, setTours] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -80,11 +84,59 @@ export default function BrowseToursPage({ role }) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [bookingTour, setBookingTour] = useState(null);
+  const [bookingDate, setBookingDate] = useState('');
+  const [bookingNotes, setBookingNotes] = useState('');
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
 
   const flash = useCallback((message, kind = 'success') => {
     setNotice({ message, kind });
     setTimeout(() => setNotice(null), 3500);
   }, []);
+
+  const openTourBooking = (tour) => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to book this tour.', 'error');
+    setSelected(null);
+    setBookingDate('');
+    setBookingNotes('');
+    setBookingTour(tour);
+  };
+
+  const bookTour = async (event) => {
+    event.preventDefault();
+    if (!bookingTour || !bookingDate) return;
+    setBookingSubmitting(true);
+    try {
+      const res = await authFetch('/api/bookings/direct', {
+        method: 'POST',
+        body: JSON.stringify({
+          tourId: bookingTour.Id,
+          startDate: bookingDate,
+          endDate: bookingDate,
+          notes: bookingNotes.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not book this tour');
+      setBookingTour(null);
+      flash('Tour booking sent. You can track it under Bookings.');
+    } catch (error) {
+      flash(error.message, 'error');
+    } finally {
+      setBookingSubmitting(false);
+    }
+  };
+
+  const messageGuide = async (tour) => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to message a guide.', 'error');
+    if (!tour?.GuideUserId) return flash('This guide is not connected to a messaging account yet.', 'error');
+    try {
+      const conversation = await startConversation(tour.GuideUserId);
+      navigate(`/messages?conversation=${conversation.conversationId}`);
+    } catch (error) {
+      flash(error.message, 'error');
+    }
+  };
 
   const fetchTours = useCallback(async (opts = {}) => {
     setLoading(true);
@@ -351,7 +403,59 @@ export default function BrowseToursPage({ role }) {
                 </div>
               </div>
             </div>
+            <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                onClick={() => messageGuide(selected)}
+                disabled={!selected.GuideUserId}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <MessageCircle className="h-4 w-4" /> Message Guide
+              </button>
+              <button
+                onClick={() => openTourBooking(selected)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-500"
+              >
+                <CalendarDays className="h-4 w-4" /> Book This Tour
+              </button>
+            </div>
           </div>
+        </Modal>
+      )}
+
+      {bookingTour && (
+        <Modal onClose={() => setBookingTour(null)}>
+          <h2 className="pr-8 text-xl font-bold text-white">Book {bookingTour.Title}</h2>
+          <p className="mt-1 text-sm text-slate-400">Package price: {currency(bookingTour.Price)} · Guide: {bookingTour.GuideName}</p>
+          <form onSubmit={bookTour} className="mt-5 space-y-4">
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Tour date</label>
+              <input
+                type="date"
+                required
+                min={new Date().toLocaleDateString('en-CA')}
+                value={bookingDate}
+                onChange={(event) => setBookingDate(event.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Notes for the guide (optional)</label>
+              <textarea
+                rows="3"
+                maxLength={500}
+                value={bookingNotes}
+                onChange={(event) => setBookingNotes(event.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={bookingSubmitting}
+              className="w-full rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-60"
+            >
+              {bookingSubmitting ? 'Sending booking…' : `Request booking · ${currency(bookingTour.Price)}`}
+            </button>
+          </form>
         </Modal>
       )}
     </div>

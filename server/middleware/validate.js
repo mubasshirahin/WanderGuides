@@ -33,11 +33,15 @@ const validDateString = (label) =>
   );
 
 export const bookingSchema = z.object({
-  guideId: z.coerce.number().int('guideId must be an integer').positive('guideId must be a positive number'),
+  guideId: z.coerce.number().int('guideId must be an integer').positive('guideId must be a positive number').optional(),
+  tourId: z.coerce.number().int('tourId must be an integer').positive('tourId must be a positive number').optional(),
   startDate: validDateString('startDate'),
   endDate: validDateString('endDate'),
   notes: optionalTrimmedString(500),
-}).strict();
+}).strict().refine((booking) => booking.guideId || booking.tourId, {
+  message: 'guideId or tourId is required',
+  path: ['guideId'],
+});
 
 export const profileUpdateSchema = z.object({
   fullName: z.string().trim().min(1).max(100).optional(),

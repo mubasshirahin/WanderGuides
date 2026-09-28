@@ -130,7 +130,7 @@ export async function getRequestWithBids(req, res) {
        g.City AS GuideCity, g.Specialties AS GuideSpecialties
      FROM TourBids tb
      INNER JOIN Users u ON u.Id = tb.GuideID
-     LEFT JOIN Guides g ON g.Id = tb.GuideID
+     LEFT JOIN Guides g ON g.UserID = tb.GuideID
      WHERE tb.RequestID = @requestId
      ORDER BY tb.CreatedAt DESC`,
     { requestId }
@@ -264,12 +264,12 @@ export async function acceptBid(req, res) {
       .input('startDate', bid.StartDate)
       .input('endDate', bid.EndDate)
       .input('totalAmount', bid.OfferedPrice)
+      .input('notes', `Accepted from custom tour: ${bid.Title}`)
       .query(
         `INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes)
          OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate,
                 INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes, INSERTED.CreatedAt
-         VALUES (@touristId, @guideId, @startDate, @endDate, 'confirmed', @totalAmount, @notes)`,
-        { touristId, guideId: bid.GuideID, startDate: bid.StartDate, endDate: bid.EndDate, totalAmount: bid.OfferedPrice, notes: `Accepted from custom tour: ${bid.Title}` }
+         VALUES (@touristId, @guideId, @startDate, @endDate, 'confirmed', @totalAmount, @notes)`
       );
 
     await transaction.commit();

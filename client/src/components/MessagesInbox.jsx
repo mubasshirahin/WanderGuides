@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { authFetch } from '../lib/demoAuth.js';
 import { ArrowLeft, Send, Search, MoreVertical, CircleCheck, Circle } from 'lucide-react';
 
-const SOCKET_URL = import.meta.env.DEV ? 'http://localhost:5000' : window.location.origin;
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 const formatTime = (value) => {
   if (!value) return '';
@@ -23,7 +23,7 @@ const formatDate = (value) => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-export default function MessagesInbox({ currentUser }) {
+export default function MessagesInbox({ currentUser, initialConversationId }) {
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -38,6 +38,7 @@ export default function MessagesInbox({ currentUser }) {
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
   const textInputRef = useRef(null);
+  const currentUserId = currentUser?.id ?? currentUser?.Id;
 
   const activeConversation = conversations.find((c) => c.conversationId === activeConversationId) || null;
 
@@ -49,12 +50,16 @@ export default function MessagesInbox({ currentUser }) {
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to load conversations');
       setConversations(data.conversations || []);
+      const requestedId = Number(initialConversationId);
+      if (requestedId && data.conversations?.some((conversation) => Number(conversation.conversationId) === requestedId)) {
+        setActiveConversationId(requestedId);
+      }
     } catch (err) {
       setError(err.message || 'Failed to load conversations');
     } finally {
       setLoadingConversations(false);
     }
-  }, []);
+  }, [initialConversationId]);
 
   const fetchMessages = useCallback(async (conversationId) => {
     setLoadingMessages(true);
@@ -83,7 +88,7 @@ export default function MessagesInbox({ currentUser }) {
   }, [activeConversationId, fetchMessages]);
 
   useEffect(() => {
-    if (!currentUser?.id) return;
+    if (!currentUserId) return;
 
     const socket = io(SOCKET_URL, {
       auth: { token: sessionStorage.getItem('wg_token') },
@@ -103,7 +108,7 @@ export default function MessagesInbox({ currentUser }) {
     });
 
     socket.on('receive_message', (message) => {
-      const userId = currentUser.id;
+      const userId = currentUserId;
       const isForCurrentConversation =
         activeConversationId && message.conversationId === activeConversationId;
 
@@ -139,7 +144,7 @@ export default function MessagesInbox({ currentUser }) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [currentUser?.id, activeConversationId, SOCKET_URL, fetchConversations]);
+  }, [currentUserId, activeConversationId, SOCKET_URL, fetchConversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

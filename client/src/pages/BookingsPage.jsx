@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, MapPin, DollarSign, Loader2, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CalendarDays, DollarSign, Loader2, User, MessageCircle, XCircle } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
+import { startConversation } from '../lib/chat.js';
 
 const statusStyles = {
   pending: 'bg-amber-500/15 text-amber-400',
@@ -11,6 +13,7 @@ const statusStyles = {
 };
 
 export default function BookingsPage({ role }) {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,6 +33,35 @@ export default function BookingsPage({ role }) {
       }
     })();
   }, []);
+
+  const cancelBooking = async (booking) => {
+    if (!window.confirm(`Cancel booking #${booking.Id}?`)) return;
+    await updateBooking(booking, 'cancelled');
+  };
+
+  const updateBooking = async (booking, status) => {
+    try {
+      const res = await authFetch(`/api/bookings/${booking.Id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not update booking');
+      setBookings((current) => current.map((item) => item.Id === booking.Id ? { ...item, Status: status } : item));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const messageOtherParty = async (booking) => {
+    try {
+      const otherUserId = role === 'guide' ? booking.TouristUserId : booking.GuideId;
+      const conversation = await startConversation(otherUserId);
+      navigate(`/messages?conversation=${conversation.conversationId}`);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const otherParty = (b) =>
     role === 'guide' ? b.TouristName : b.GuideName;
@@ -72,6 +104,7 @@ export default function BookingsPage({ role }) {
                   <th className="px-4 py-3">{role === 'admin' ? 'Tourist → Guide' : role === 'guide' ? 'Tourist' : 'Guide'}</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Total</th>
+                  {['tourist', 'guide'].includes(role) && <th className="px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -113,6 +146,35 @@ export default function BookingsPage({ role }) {
                         {Number(b.TotalAmount).toFixed(2)}
                       </span>
                     </td>
+                    {['tourist', 'guide'].includes(role) && (
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            onClick={() => messageOtherParty(b)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" /> Message
+                          </button>
+                          {role === 'tourist' && ['pending', 'confirmed'].includes(String(b.Status).toLowerCase()) && (
+                            <button
+                              onClick={() => cancelBooking(b)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-500/20"
+                            >
+                              <XCircle className="h-3.5 w-3.5" /> Cancel
+                            </button>
+                          )}
+                          {role === 'guide' && b.Status === 'pending' && (
+                            <>
+                              <button onClick={() => updateBooking(b, 'confirmed')} className="rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">Accept</button>
+                              <button onClick={() => updateBooking(b, 'cancelled')} className="rounded-lg bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-500/20">Decline</button>
+                            </>
+                          )}
+                          {role === 'guide' && b.Status === 'confirmed' && (
+                            <button onClick={() => updateBooking(b, 'completed')} className="rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">Complete</button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
