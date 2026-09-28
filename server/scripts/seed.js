@@ -77,7 +77,8 @@ async function ensureGuideTour(guideId, tour) {
     await query(
       `UPDATE GuideTours SET ImageUrl = COALESCE(ImageUrl, @imageUrl),
          Category = COALESCE(Category, @category), Difficulty = COALESCE(Difficulty, @difficulty),
-         MeetingPoint = COALESCE(MeetingPoint, @meetingPoint), Highlights = COALESCE(Highlights, @highlights)
+         MeetingPoint = COALESCE(MeetingPoint, @meetingPoint), Highlights = COALESCE(Highlights, @highlights),
+         Itinerary = COALESCE(Itinerary, @itinerary)
        WHERE Id = @id`,
       { id: existing[0].Id, ...tour }
     );
@@ -87,11 +88,11 @@ async function ensureGuideTour(guideId, tour) {
   const rows = await query(
     `INSERT INTO GuideTours
        (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize,
-        Category, Difficulty, MeetingPoint, Included, Highlights, Languages, ImageUrl)
+        Category, Difficulty, MeetingPoint, Included, Highlights, Languages, ImageUrl, Itinerary)
      OUTPUT INSERTED.Id
      VALUES (@guideId, @title, @description, @location, @price, @durationHours,
         @maxGroupSize, @category, @difficulty, @meetingPoint, @included,
-        @highlights, @languages, @imageUrl)`,
+        @highlights, @languages, @imageUrl, @itinerary)`,
     { guideId, ...tour }
   );
   return rows[0].Id;
@@ -158,7 +159,7 @@ async function run() {
         city: 'Dhaka', phone: '+8801700000001', bio: 'Local historian sharing Old Dhaka food, architecture, and riverfront stories.',
         specialties: 'Old Dhaka, Street Food, History', languages: 'Bangla, English', hourlyRate: 500, dailyRate: 3500,
         rating: 4.9, totalReviews: 24,
-        tour: { title: 'Old Dhaka Heritage & Food Walk', description: 'A relaxed walk through historic lanes, landmarks, and local food stops.', location: 'Dhaka', price: 3500, durationHours: 6, maxGroupSize: 6, category: 'Cultural', difficulty: 'Easy', meetingPoint: 'Lalbagh Fort main gate', included: 'Local snacks, bottled water', highlights: 'Lalbagh Fort, Shakhari Bazaar, Dhakeshwari Temple', languages: 'Bangla, English', imageUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=1000&q=80' },
+        tour: { title: 'Old Dhaka Heritage & Food Walk', description: 'A relaxed walk through historic lanes, landmarks, and local food stops.', location: 'Dhaka', price: 3500, durationHours: 6, maxGroupSize: 6, category: 'Cultural', difficulty: 'Easy', meetingPoint: 'Lalbagh Fort main gate', included: 'Local snacks, bottled water', highlights: 'Lalbagh Fort, Shakhari Bazaar, Dhakeshwari Temple', languages: 'Bangla, English', imageUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=1000&q=80', itinerary: JSON.stringify([{ title: 'Lalbagh Fort', details: 'Meet at the main gate and explore the Mughal-era fort.' }, { title: 'Shakhari Bazaar', details: 'Walk through the historic lanes and stop for local snacks.' }, { title: 'Dhakeshwari Temple', details: 'Finish with a guided visit to the city landmark.' }]) },
       },
       {
         fullName: 'Shafiq Ahmed', email: 'shafiq.demo@example.com', password: 'password', role: 'guide',
@@ -172,7 +173,7 @@ async function run() {
         city: 'Sylhet', phone: '+8801700000003', bio: 'Nature and tea garden guide with an emphasis on responsible local travel.',
         specialties: 'Tea Gardens, Nature, Hiking', languages: 'Bangla, English', hourlyRate: 600, dailyRate: 4200,
         rating: 5, totalReviews: 31,
-        tour: { title: 'Sylhet Tea Gardens & Ratargul', description: 'Visit tea gardens and discover the wetlands with a local guide.', location: 'Sylhet', price: 4200, durationHours: 8, maxGroupSize: 6, category: 'Nature', difficulty: 'Moderate', meetingPoint: 'Sylhet Railway Station', included: 'Boat ride, drinking water', highlights: 'Tea gardens, Ratargul swamp forest, local lunch stop', languages: 'Bangla, English', imageUrl: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=1000&q=80' },
+        tour: { title: 'Sylhet Tea Gardens & Ratargul', description: 'Visit tea gardens and discover the wetlands with a local guide.', location: 'Sylhet', price: 4200, durationHours: 8, maxGroupSize: 6, category: 'Nature', difficulty: 'Moderate', meetingPoint: 'Sylhet Railway Station', included: 'Boat ride, drinking water', highlights: 'Tea gardens, Ratargul swamp forest, local lunch stop', languages: 'Bangla, English', imageUrl: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=1000&q=80', itinerary: JSON.stringify([{ title: 'Tea garden visit', details: 'Walk among the tea fields with local tea and photo stops.' }, { title: 'Ratargul wetlands', details: 'Take a guided boat trip through the swamp forest.' }, { title: 'Local lunch', details: 'Enjoy a regional meal before returning to Sylhet.' }]) },
       },
       {
         fullName: 'Tanvir Hasan', email: 'tanvir.demo@example.com', password: 'password', role: 'guide',

@@ -476,7 +476,7 @@ export async function browseTours(req, res) {
     SELECT
       gt.Id, gt.Title, gt.Description, gt.Location, gt.Price,
       gt.DurationHours, gt.MaxGroupSize, gt.Category, gt.Difficulty,
-      gt.MeetingPoint, gt.Included, gt.Highlights, gt.Languages, gt.ImageUrl, gt.CreatedAt,
+      gt.MeetingPoint, gt.Itinerary, gt.Included, gt.Highlights, gt.Languages, gt.ImageUrl, gt.CreatedAt,
       g.Id AS GuideProfileId, g.UserID AS GuideUserId,
       g.FullName AS GuideName, g.City AS GuideCity,
       g.Rating AS GuideRating, g.TotalReviews AS GuideReviews, g.HourlyRate, g.DailyRate,
