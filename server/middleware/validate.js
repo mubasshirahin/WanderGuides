@@ -35,6 +35,7 @@ const validDateString = (label) =>
 export const bookingSchema = z.object({
   guideId: z.coerce.number().int('guideId must be an integer').positive('guideId must be a positive number').optional(),
   tourId: z.coerce.number().int('tourId must be an integer').positive('tourId must be a positive number').optional(),
+  groupSize: z.coerce.number().int().min(1).max(50).default(1),
   startDate: validDateString('startDate'),
   endDate: validDateString('endDate'),
   notes: optionalTrimmedString(500),

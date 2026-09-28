@@ -37,12 +37,16 @@ export async function getDashboard(req, res) {
   // 2. Next upcoming tour (earliest pending/confirmed booking)
   const nextTourRows = await query(
     `SELECT TOP 1
-       b.Id, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
-       u.FullName AS GuideName, u.AvatarUrl AS GuideAvatar, u.Phone AS GuidePhone,
+       b.Id, b.TourId, b.GroupSize, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
+       DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) AS CancellationDeadline,
+       CASE WHEN SYSUTCDATETIME() < DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS CanCancel,
+       gt.Title AS TourTitle, gt.Itinerary, gt.MeetingPoint, gt.Location AS TourLocation,
+       u.FullName AS GuideName, u.Email AS GuideEmail, u.AvatarUrl AS GuideAvatar, u.Phone AS GuidePhone,
        g.City AS GuideCity, g.Specialties AS GuideSpecialties, g.Rating AS GuideRating
      FROM Bookings b
      INNER JOIN Users u ON u.Id = b.GuideId
      LEFT JOIN Guides g ON g.Email = u.Email
+     LEFT JOIN GuideTours gt ON gt.Id = b.TourId
      WHERE b.TouristUserId = @userId
        AND b.Status IN ('pending','confirmed')
        AND b.EndDate >= CAST(GETDATE() AS DATE)
@@ -55,12 +59,16 @@ export async function getDashboard(req, res) {
   // 3. All bookings (for tabbed list)
   const bookingsRows = await query(
     `SELECT
-       b.Id, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
-       u.FullName AS GuideName, u.AvatarUrl AS GuideAvatar,
+       b.Id, b.TourId, b.GroupSize, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
+       DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) AS CancellationDeadline,
+       CASE WHEN SYSUTCDATETIME() < DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS CanCancel,
+       gt.Title AS TourTitle, gt.Itinerary, gt.MeetingPoint, gt.Location AS TourLocation,
+       u.FullName AS GuideName, u.Email AS GuideEmail, u.AvatarUrl AS GuideAvatar, u.Phone AS GuidePhone,
        g.City AS GuideCity, g.Rating AS GuideRating, g.Specialties AS GuideSpecialties
      FROM Bookings b
      INNER JOIN Users u ON u.Id = b.GuideId
      LEFT JOIN Guides g ON g.Email = u.Email
+     LEFT JOIN GuideTours gt ON gt.Id = b.TourId
      WHERE b.TouristUserId = @userId
      ORDER BY b.CreatedAt DESC`,
     { userId }
@@ -106,7 +114,7 @@ export async function cancelBooking(req, res) {
 
   // Verify booking exists and belongs to this tourist
   const existing = await query(
-    `SELECT Id, Status FROM Bookings WHERE Id = @id AND TouristUserId = @userId`,
+    `SELECT Id, Status, StartDate FROM Bookings WHERE Id = @id AND TouristUserId = @userId`,
     { id: bookingId, userId }
   );
 
@@ -123,6 +131,10 @@ export async function cancelBooking(req, res) {
   if (booking.Status === 'completed') {
     throw new AppError('Cannot cancel a completed booking', 400);
   }
+  if (['pending', 'confirmed'].includes(String(booking.Status).toLowerCase()) &&
+      new Date(booking.StartDate).getTime() - Date.now() < 48 * 60 * 60 * 1000) {
+    throw new AppError('Cancellation closes 48 hours before the tour starts', 400);
+  }
 
   // Update status to cancelled
   const updatedRows = await query(
@@ -131,6 +143,12 @@ export async function cancelBooking(req, res) {
             INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes, INSERTED.CreatedAt
      WHERE Id = @id AND TouristUserId = @userId`,
     { id: bookingId, userId }
+  );
+
+  await query(
+    `INSERT INTO TouristNotifications (TouristUserId, Type, Title, Body, LinkUrl)
+     VALUES (@userId, 'booking', 'Booking cancelled', 'Your booking was cancelled.', '/dashboard')`,
+    { userId }
   );
 
   res.json({ ok: true, booking: updatedRows[0] });
