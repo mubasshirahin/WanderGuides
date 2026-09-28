@@ -33,11 +33,15 @@ const statements = [
   `IF COL_LENGTH('GuideTours', 'Category') IS NULL ALTER TABLE GuideTours ADD Category NVARCHAR(100) NULL`,
   `IF COL_LENGTH('GuideTours', 'Difficulty') IS NULL ALTER TABLE GuideTours ADD Difficulty NVARCHAR(50) NULL`,
   `IF COL_LENGTH('GuideTours', 'MeetingPoint') IS NULL ALTER TABLE GuideTours ADD MeetingPoint NVARCHAR(255) NULL`,
+  `IF COL_LENGTH('GuideTours', 'Itinerary') IS NULL ALTER TABLE GuideTours ADD Itinerary NVARCHAR(MAX) NULL`,
   `IF COL_LENGTH('GuideTours', 'Included') IS NULL ALTER TABLE GuideTours ADD Included NVARCHAR(MAX) NULL`,
   `IF COL_LENGTH('GuideTours', 'Highlights') IS NULL ALTER TABLE GuideTours ADD Highlights NVARCHAR(MAX) NULL`,
   `IF COL_LENGTH('GuideTours', 'Languages') IS NULL ALTER TABLE GuideTours ADD Languages NVARCHAR(255) NULL`,
   `IF COL_LENGTH('GuideTours', 'ImageUrl') IS NULL ALTER TABLE GuideTours ADD ImageUrl NVARCHAR(1000) NULL`,
   `IF COL_LENGTH('Bookings', 'PaymentStatus') IS NULL ALTER TABLE Bookings ADD PaymentStatus NVARCHAR(20) NOT NULL CONSTRAINT DF_Bookings_PaymentStatus_UI DEFAULT 'unpaid'`,
+  `IF COL_LENGTH('Bookings', 'TourId') IS NULL ALTER TABLE Bookings ADD TourId INT NULL`,
+  `IF COL_LENGTH('Bookings', 'GroupSize') IS NULL ALTER TABLE Bookings ADD GroupSize INT NOT NULL CONSTRAINT DF_Bookings_GroupSize_UI DEFAULT 1`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Bookings_GuideTours') ALTER TABLE Bookings ADD CONSTRAINT FK_Bookings_GuideTours FOREIGN KEY (TourId) REFERENCES GuideTours(Id)`,
   `IF OBJECT_ID('TouristFavorites', 'U') IS NULL
    CREATE TABLE TouristFavorites (
      Id INT IDENTITY PRIMARY KEY,
@@ -50,6 +54,29 @@ const statements = [
    )`,
   `IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CHK_Bookings_PaymentStatus_UI')
    ALTER TABLE Bookings ADD CONSTRAINT CHK_Bookings_PaymentStatus_UI CHECK (PaymentStatus IN ('unpaid','paid','refunded'))`,
+  `IF OBJECT_ID('TouristFavoriteGuides', 'U') IS NULL
+   CREATE TABLE TouristFavoriteGuides (
+     Id INT IDENTITY PRIMARY KEY,
+     TouristUserId INT NOT NULL,
+     GuideUserId INT NOT NULL,
+     CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+     CONSTRAINT FK_TouristFavoriteGuides_Tourist_UI FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+     CONSTRAINT FK_TouristFavoriteGuides_Guide_UI FOREIGN KEY (GuideUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+     CONSTRAINT UQ_TouristFavoriteGuides_Pair_UI UNIQUE (TouristUserId, GuideUserId)
+   )`,
+  `IF OBJECT_ID('TouristNotifications', 'U') IS NULL
+   CREATE TABLE TouristNotifications (
+     Id INT IDENTITY PRIMARY KEY,
+     TouristUserId INT NOT NULL,
+     Type NVARCHAR(40) NOT NULL,
+     Title NVARCHAR(160) NOT NULL,
+     Body NVARCHAR(500) NULL,
+     LinkUrl NVARCHAR(300) NULL,
+     IsRead BIT NOT NULL DEFAULT 0,
+     CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+     CONSTRAINT FK_TouristNotifications_User_UI FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE
+   )`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TouristNotifications_UserDate' AND object_id = OBJECT_ID('TouristNotifications')) CREATE INDEX IX_TouristNotifications_UserDate ON TouristNotifications(TouristUserId, CreatedAt DESC)`,
 
   // Guides can leave a review for tourists after a completed booking.
   `IF OBJECT_ID('GuideReviewsOfTourists', 'U') IS NULL
