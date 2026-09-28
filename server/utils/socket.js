@@ -107,6 +107,17 @@ export function initSocket(server) {
           isMine: false,
         });
 
+        if (Number(convo.GuideID) === Number(senderId)) {
+          const noticeRows = await query(
+            `INSERT INTO TouristNotifications (TouristUserId, Type, Title, Body, LinkUrl)
+             OUTPUT INSERTED.Id, INSERTED.Type, INSERTED.Title, INSERTED.Body, INSERTED.LinkUrl,
+                    INSERTED.IsRead, INSERTED.CreatedAt
+             VALUES (@touristId, 'message', 'New message from your guide', @body, '/messages')`,
+            { touristId: receiverId, body: String(message.MessageText).trim().slice(0, 500) }
+          );
+          ioInstance.to(String(receiverId)).emit('notification:new', noticeRows[0]);
+        }
+
         callback?.({ ok: true, message: normalizedMessage });
       } catch (err) {
         console.error('[socket] send_message error:', err);
