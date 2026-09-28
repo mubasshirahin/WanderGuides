@@ -33,6 +33,8 @@ CREATE TABLE Bookings (
     Id            INT IDENTITY PRIMARY KEY,
     TouristUserId INT NOT NULL,
     GuideId       INT NOT NULL,
+    TourId        INT NULL,
+    GroupSize     INT NOT NULL DEFAULT 1,
     StartDate     DATE NOT NULL,
     EndDate       DATE NOT NULL,
     Status        NVARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (Status IN ('pending','confirmed','completed','cancelled')),
@@ -274,6 +276,7 @@ CREATE TABLE GuideTours (
     Category      NVARCHAR(100) NULL,
     Difficulty    NVARCHAR(50) NULL,
     MeetingPoint  NVARCHAR(255) NULL,
+    Itinerary     NVARCHAR(MAX) NULL,
     ImageUrl      NVARCHAR(1000) NULL,
     Included      NVARCHAR(MAX) NULL,
     Highlights    NVARCHAR(MAX) NULL,
@@ -301,6 +304,33 @@ CREATE TABLE TouristFavorites (
     CONSTRAINT UQ_TouristFavorites_UserTour UNIQUE (TouristUserId, GuideTourId)
 );
 CREATE INDEX IX_TouristFavorites_User ON TouristFavorites(TouristUserId);
+
+CREATE TABLE TouristFavoriteGuides (
+    Id INT IDENTITY PRIMARY KEY,
+    TouristUserId INT NOT NULL,
+    GuideUserId INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_TouristFavoriteGuides_Tourist FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_TouristFavoriteGuides_Guide FOREIGN KEY (GuideUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT UQ_TouristFavoriteGuides_Pair UNIQUE (TouristUserId, GuideUserId)
+);
+CREATE INDEX IX_TouristFavoriteGuides_Tourist ON TouristFavoriteGuides(TouristUserId);
+
+CREATE TABLE TouristNotifications (
+    Id INT IDENTITY PRIMARY KEY,
+    TouristUserId INT NOT NULL,
+    Type NVARCHAR(40) NOT NULL,
+    Title NVARCHAR(160) NOT NULL,
+    Body NVARCHAR(500) NULL,
+    LinkUrl NVARCHAR(300) NULL,
+    IsRead BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_TouristNotifications_User FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE
+);
+CREATE INDEX IX_TouristNotifications_UserDate ON TouristNotifications(TouristUserId, CreatedAt DESC);
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Bookings_GuideTours')
+    ALTER TABLE Bookings ADD CONSTRAINT FK_Bookings_GuideTours FOREIGN KEY (TourId) REFERENCES GuideTours(Id);
 
 -- =============================================
 -- Bids Table Schema
