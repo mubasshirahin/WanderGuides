@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Search, MapPin, Star, X, Filter, Loader2, Eye, Clock,
-  CalendarDays, CheckCircle, AlertCircle, Gavel, DollarSign, Coins, Mail, Phone, MessageCircle
+  CalendarDays, CheckCircle, AlertCircle, Gavel, DollarSign, Coins, Mail, Phone, MessageCircle, Heart
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -66,6 +66,8 @@ function Avatar({ src, name, className = 'h-12 w-12' }) {
 export default function ExplorePage({ role }) {
   const navigate = useNavigate();
   const [guides, setGuides] = useState([]);
+  const [savedGuides, setSavedGuides] = useState([]);
+  const [showingSavedGuides, setShowingSavedGuides] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 12;
@@ -86,9 +88,16 @@ export default function ExplorePage({ role }) {
   const [bookGuide, setBookGuide] = useState(null);    // direct book modal
   const [bidGuide, setBidGuide] = useState(null);      // bid modal
 
-  const [bookForm, setBookForm] = useState({ guideId: '', startDate: '', endDate: '', notes: '' });
+  const [bookForm, setBookForm] = useState({ guideId: '', startDate: '', endDate: '', groupSize: 1, notes: '' });
   const [bidForm, setBidForm] = useState({ guideId: '', offeredPrice: '', startDate: '', endDate: '', message: '' });
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (role !== 'tourist') return;
+    authFetch('/api/tourist/saved-guides').then((response) => response.json()).then((json) => {
+      if (json.ok) setSavedGuides(json.guides || []);
+    }).catch(() => {});
+  }, [role]);
 
   const flash = useCallback((message, kind = 'success') => {
     setNotice({ message, kind });
@@ -166,6 +175,31 @@ export default function ExplorePage({ role }) {
     }
   };
 
+  const toggleSavedGuide = async (guide) => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to save guides.', 'error');
+    const guideId = Number(guide.UserID || guide.Id);
+    const isSaved = savedGuides.some((item) => Number(item.UserID) === guideId);
+    try {
+      const response = await authFetch(`/api/tourist/saved-guides/${guideId}`, { method: isSaved ? 'DELETE' : 'PUT' });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Could not update saved guides');
+      setSavedGuides((items) => isSaved ? items.filter((item) => Number(item.UserID) !== guideId) : [...items, guide]);
+      flash(isSaved ? 'Guide removed from saved list.' : 'Guide saved.');
+    } catch (err) { flash(err.message, 'error'); }
+  };
+
+  const toggleSavedList = async () => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to view saved guides.', 'error');
+    if (showingSavedGuides) { setShowingSavedGuides(false); return; }
+    try {
+      const response = await authFetch('/api/tourist/saved-guides');
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Could not load saved guides');
+      setSavedGuides(result.guides || []);
+      setShowingSavedGuides(true);
+    } catch (err) { flash(err.message, 'error'); }
+  };
+
   const submitBook = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -178,7 +212,7 @@ export default function ExplorePage({ role }) {
       if (!data.ok) throw new Error(data.message || 'Booking failed');
       flash('Direct booking placed! Pending confirmation.');
       setBookGuide(null);
-      setBookForm({ guideId: '', startDate: '', endDate: '', notes: '' });
+      setBookForm({ guideId: '', startDate: '', endDate: '', groupSize: 1, notes: '' });
     } catch (e) {
       flash(e.message, 'error');
     } finally {
@@ -263,7 +297,8 @@ export default function ExplorePage({ role }) {
         {/* Guide grid */}
         <div className="lg:col-span-3">
           <div className="mb-4 flex items-center justify-between text-sm text-slate-400">
-            <span>{loading ? 'Searching…' : `${total} guide${total === 1 ? '' : 's'} found`}</span>
+            <span>{showingSavedGuides ? `${savedGuides.length} saved guides` : `${total} guide${total === 1 ? '' : 's'} found`}</span>
+            {role === 'tourist' && <button type="button" onClick={toggleSavedList} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"><Heart className="h-3.5 w-3.5 text-rose-300" />{showingSavedGuides ? 'Browse all guides' : 'Saved guides'}</button>}
           </div>
 
           {loading && (
@@ -278,17 +313,17 @@ export default function ExplorePage({ role }) {
             </div>
           )}
 
-          {!loading && !error && guides.length === 0 && (
+          {!loading && !error && (showingSavedGuides ? savedGuides : guides).length === 0 && (
             <div className="rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.03] px-6 py-16 text-center">
               <Search className="mx-auto mb-4 h-10 w-10 text-slate-500" />
-              <p className="text-slate-400">No guides match your filters. Try widening the search.</p>
+              <p className="text-slate-400">{showingSavedGuides ? 'No saved guides yet. Save a guide with the heart button.' : 'No guides match your filters. Try widening the search.'}</p>
             </div>
           )}
 
-          {!loading && !error && guides.length > 0 && (
+          {!loading && !error && (showingSavedGuides ? savedGuides : guides).length > 0 && (
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {guides.map((g) => (
+                {(showingSavedGuides ? savedGuides : guides).map((g) => (
                   <GuideCard
                     key={g.Id}
                     guide={g}
@@ -296,6 +331,8 @@ export default function ExplorePage({ role }) {
                     onBook={openBook}
                     onBid={openBid}
                     isTourist={role === 'tourist'}
+                    isSaved={savedGuides.some((item) => Number(item.UserID) === Number(g.UserID || g.Id))}
+                    onSave={toggleSavedGuide}
                   />
                 ))}
               </div>
@@ -513,6 +550,7 @@ export default function ExplorePage({ role }) {
             Reserve at the listed rate. Daily rate: {currency(bookGuide.DailyRate)}.
           </p>
           <form onSubmit={submitBook} className="mt-5 space-y-4">
+            <div><label className="mb-1 block text-xs text-slate-400">Group size</label><input type="number" min="1" max="50" required value={bookForm.groupSize} onChange={field('groupSize', setBookForm)} className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white" /></div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs text-slate-400">Start date</label>
@@ -619,12 +657,12 @@ export default function ExplorePage({ role }) {
 }
 
 // ─── Guide card ───────────────────────────────────────────────────────
-function GuideCard({ guide: g, onView, onBook, onBid, isTourist }) {
+function GuideCard({ guide: g, onView, onBook, onBid, isTourist, isSaved, onSave }) {
   return (
     <div className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-500/40 hover:bg-white/[0.05]">
       <div className="flex items-start justify-between">
         <Avatar src={g.AvatarUrl} name={g.FullName} />
-        <Stars rating={g.Rating} />
+        <div className="flex items-center gap-3"><button type="button" onClick={() => onSave(g)} aria-label={isSaved ? 'Remove saved guide' : 'Save guide'} className="rounded-full border border-white/10 p-2 text-slate-300 hover:text-rose-300"><Heart className={`h-4 w-4 ${isSaved ? 'fill-rose-400 text-rose-400' : ''}`} /></button><Stars rating={g.Rating} /></div>
       </div>
 
       <h3 className="mt-3 text-lg font-semibold text-white">{g.FullName}</h3>

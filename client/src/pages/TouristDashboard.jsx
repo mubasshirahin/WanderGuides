@@ -2,9 +2,12 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   LayoutDashboard, CalendarDays, MapPin, DollarSign, Star, Clock,
   CheckCircle, XCircle, Loader2, Phone, MessageSquare, X, Menu,
-  Search, ChevronRight, AlertTriangle, User, Bell
+  Search, ChevronRight, ChevronLeft, AlertTriangle, User, Bell, Users, ExternalLink
 } from 'lucide-react';
 import { authFetch } from '../lib/demoAuth.js';
+import { io } from 'socket.io-client';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 const TABS = [
   { key: 'active', label: 'Active', icon: Clock },
@@ -48,6 +51,7 @@ export default function TouristDashboard() {
   const [cancellingId, setCancellingId] = useState(null);
   const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -66,6 +70,26 @@ export default function TouristDashboard() {
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
+  useEffect(() => {
+    let active = true;
+    authFetch('/api/tourist/notifications').then((res) => res.json()).then((json) => {
+      if (active && json.ok) setNotifications(json.notifications || []);
+    }).catch(() => {});
+    const token = sessionStorage.getItem('wg_token');
+    if (!token) return () => { active = false; };
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket', 'polling'] });
+    socket.on('notification:new', (notification) => setNotifications((items) => [notification, ...items.filter((item) => item.Id !== notification.Id)].slice(0, 30)));
+    return () => { active = false; socket.disconnect(); };
+  }, []);
+
+  const markNotificationRead = async (id) => {
+    try {
+      const response = await authFetch(`/api/tourist/notifications/${id}/read`, { method: 'PUT' });
+      const json = await response.json();
+      if (json.ok) setNotifications((items) => items.map((item) => item.Id === id ? { ...item, IsRead: true } : item));
+    } catch { /* refreshed the next time the dashboard loads */ }
+  };
+
   const handleCancel = async (bookingId) => {
     if (!window.confirm('Are you sure you want to cancel this booking?')) return;
     setCancellingId(bookingId);
@@ -76,6 +100,9 @@ export default function TouristDashboard() {
       const json = await res.json();
       if (!json.ok) throw new Error(json.message || 'Cancel failed');
       await fetchDashboard();
+      const notificationsResponse = await authFetch('/api/tourist/notifications');
+      const notificationsJson = await notificationsResponse.json();
+      if (notificationsJson.ok) setNotifications(notificationsJson.notifications || []);
     } catch (e) {
       alert(e.message);
     } finally {
@@ -202,6 +229,11 @@ export default function TouristDashboard() {
             </div>
           )}
           {nextTour && <NextTourBanner tour={nextTour} onCancel={handleCancel} cancellingId={cancellingId} />}
+          <BookingCalendar bookings={bookings || []} />
+          <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+            <div className="mb-3 flex items-center justify-between"><h2 className="font-display text-lg font-bold text-white">Notifications</h2><span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs text-brand-300">{notifications.filter((item) => !item.IsRead).length} unread</span></div>
+            {notifications.length === 0 ? <p className="text-sm text-slate-400">Booking updates and guide messages will appear here.</p> : <div className="space-y-2">{notifications.slice(0, 5).map((item) => <div key={item.Id} className={`flex items-start justify-between gap-3 rounded-xl p-3 ${item.IsRead ? 'bg-white/[0.03]' : 'bg-brand-500/[0.08]'}`}><div><p className="text-sm font-semibold text-white">{item.Title}</p><p className="mt-1 text-xs text-slate-400">{item.Body}</p></div>{!item.IsRead && <button onClick={() => markNotificationRead(item.Id)} className="shrink-0 text-xs text-brand-300 hover:text-white">Mark read</button>}</div>)}</div>}
+          </section>
 
           {/* ─── Tabbed Booking List ─────────────────────── */}
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl overflow-hidden">
@@ -265,6 +297,27 @@ export default function TouristDashboard() {
 }
 
 // ─── Sidebar Content ──────────────────────────────────────────
+function BookingCalendar({ bookings }) {
+  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const today = new Date();
+  const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const [selectedDay, setSelectedDay] = useState(localToday);
+  const firstWeekday = month.getDay();
+  const cells = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(month.getFullYear(), month.getMonth(), index - firstWeekday + 1);
+    return { date, inMonth: date.getMonth() === month.getMonth(), key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` };
+  });
+  const onDay = bookings.filter((booking) => String(booking.StartDate).slice(0, 10) === selectedDay);
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+      <div className="mb-4 flex items-center justify-between"><div><h2 className="font-display text-lg font-bold text-white">Trip calendar</h2><p className="text-xs text-slate-400">Your booking dates at a glance</p></div><div className="flex items-center gap-3"><button aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="rounded-lg border border-white/10 p-2 text-slate-300"><ChevronLeft className="h-4 w-4" /></button><span className="min-w-28 text-center text-sm font-semibold text-white">{month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span><button aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="rounded-lg border border-white/10 p-2 text-slate-300"><ChevronRight className="h-4 w-4" /></button></div></div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase text-slate-500">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day) => <span key={day} className="py-2">{day}</span>)}</div>
+      <div className="grid grid-cols-7 gap-1">{cells.map(({ date, inMonth, key }) => { const hasBooking = bookings.some((booking) => String(booking.StartDate).slice(0, 10) === key); return <button key={key} disabled={!inMonth} onClick={() => setSelectedDay(key)} className={`relative rounded-lg py-2 text-sm ${inMonth ? 'text-slate-200 hover:bg-white/10' : 'text-slate-700'} ${selectedDay === key ? 'bg-brand-500/20 text-brand-200 ring-1 ring-brand-400/50' : ''}`}>{date.getDate()}{hasBooking && <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-brand-400" />}</button>; })}</div>
+      <div className="mt-4 border-t border-white/10 pt-3"><p className="mb-2 text-xs font-semibold text-slate-300">{new Date(`${selectedDay}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>{onDay.length ? onDay.map((booking) => <p key={booking.Id} className="text-sm text-brand-200">{booking.TourTitle || `Tour with ${booking.GuideName}`} · <span className="capitalize text-slate-400">{booking.Status}</span></p>) : <p className="text-xs text-slate-500">No booking on this date.</p>}</div>
+    </section>
+  );
+}
+
 function SidebarContent({ user, stats }) {
   return (
     <div className="space-y-6">
@@ -344,7 +397,8 @@ function NextTourBanner({ tour, onCancel, cancellingId }) {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <InfoPill icon={User} label="Guide" value={tour.GuideName} />
-        <InfoPill icon={MapPin} label="City" value={tour.GuideCity || 'N/A'} />
+        <InfoPill icon={MapPin} label="Tour" value={tour.TourTitle || tour.TourLocation || tour.GuideCity || 'N/A'} />
+        <InfoPill icon={Users} label="Group size" value={tour.GroupSize || 1} />
         <InfoPill icon={Star} label="Rating" value={tour.GuideRating ? Number(tour.GuideRating).toFixed(1) : 'N/A'} />
         <InfoPill icon={CalendarDays} label="Dates" value={`${formatDate(tour.StartDate)} — ${formatDate(tour.EndDate)}`} />
         <InfoPill icon={DollarSign} label="Cost" value={`৳${Number(tour.TotalAmount).toFixed(2)}`} />
@@ -363,13 +417,13 @@ function NextTourBanner({ tour, onCancel, cancellingId }) {
       )}
 
       <a target="_blank" rel="noreferrer"
-        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(tour.GuideCity || '')}`}
+        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(tour.MeetingPoint || tour.TourLocation || tour.GuideCity || '')}`}
         className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-brand-300 hover:text-brand-200">
-        <MapPin className="h-3.5 w-3.5" /> Open destination in Maps
+        <MapPin className="h-3.5 w-3.5" /> {tour.MeetingPoint || tour.TourLocation || tour.GuideCity || 'Open destination'} in Maps
       </a>
 
       <div className="mt-5 flex flex-wrap gap-3">
-        {tour.Status !== 'cancelled' && tour.Status !== 'completed' && (
+        {tour.Status !== 'cancelled' && tour.Status !== 'completed' && tour.CanCancel !== false && tour.CanCancel !== 0 && (
           <button
             onClick={() => onCancel(tour.Id)}
             disabled={cancellingId === tour.Id}
@@ -383,6 +437,7 @@ function NextTourBanner({ tour, onCancel, cancellingId }) {
             Cancel Booking
           </button>
         )}
+        {tour.Status !== 'cancelled' && tour.Status !== 'completed' && !tour.CanCancel && <span className="self-center text-xs text-amber-300">Cancellation closes 48 hours before the tour.</span>}
         {tour.GuidePhone && (
           <a
             href={`tel:${tour.GuidePhone}`}
@@ -415,6 +470,7 @@ function InfoPill({ icon: Icon, label, value, capitalize }) {
 
 // ─── Booking Row ──────────────────────────────────────────────
 function BookingRow({ booking: b, onCancel, cancellingId }) {
+  const [expanded, setExpanded] = useState(false);
   const days = daysUntil(b.StartDate);
   const isActive = b.Status === 'pending' || b.Status === 'confirmed';
 
@@ -472,7 +528,7 @@ function BookingRow({ booking: b, onCancel, cancellingId }) {
       </div>
 
       {/* Actions */}
-      {isActive && (
+      {isActive && b.CanCancel !== false && b.CanCancel !== 0 && (
         <div className="sm:w-32 sm:text-right">
           <button
             onClick={() => onCancel(b.Id)}
@@ -488,6 +544,20 @@ function BookingRow({ booking: b, onCancel, cancellingId }) {
           </button>
         </div>
       )}
+      <button type="button" onClick={() => setExpanded((value) => !value)} className="self-start text-xs font-semibold text-brand-300 hover:text-white sm:self-center">{expanded ? 'Hide details' : 'Details'}</button>
+      {expanded && <div className="w-full rounded-xl border border-white/10 bg-black/10 p-4 text-sm text-slate-300 sm:basis-full">
+        <div className="grid gap-3 sm:grid-cols-2"><p><span className="text-slate-500">Package:</span> {b.TourTitle || 'Direct guide booking'}</p><p><span className="text-slate-500">Group:</span> {b.GroupSize || 1} traveler(s)</p><p><span className="text-slate-500">Guide contact:</span> {b.GuidePhone ? <a className="text-brand-300" href={`tel:${b.GuidePhone}`}>{b.GuidePhone}</a> : b.GuideEmail ? <a className="text-brand-300" href={`mailto:${b.GuideEmail}`}>{b.GuideEmail}</a> : 'Not provided'}</p><p><span className="text-slate-500">Payment:</span> <span className="capitalize">{b.PaymentStatus || 'unpaid'}</span></p><p><span className="text-slate-500">Cancellation deadline:</span> {b.CancellationDeadline ? formatDate(b.CancellationDeadline) : '48 hours before start'}</p><p><span className="text-slate-500">Meeting point:</span> {b.MeetingPoint || b.TourLocation || b.GuideCity || 'Coordinate with your guide'}</p></div>
+        {(b.MeetingPoint || b.TourLocation || b.GuideCity) && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.MeetingPoint || b.TourLocation || b.GuideCity)}`} className="mt-3 inline-flex items-center gap-1 text-xs text-brand-300"><ExternalLink className="h-3 w-3" /> Map route</a>}
+        {!b.CanCancel && isActive && <p className="mt-2 text-xs text-amber-300">The 48-hour cancellation window has closed.</p>}
+        {b.Itinerary && <ItineraryDetails value={b.Itinerary} />}
+      </div>}
     </div>
   );
+}
+
+function ItineraryDetails({ value }) {
+  let days = [];
+  try { days = Array.isArray(value) ? value : JSON.parse(value); } catch { days = []; }
+  if (!Array.isArray(days) || !days.length) return null;
+  return <div className="mt-4"><h4 className="mb-2 font-semibold text-white">Trip itinerary</h4><ol className="space-y-2">{days.map((day, index) => <li key={index} className="rounded-lg bg-white/[0.04] p-3"><p className="text-xs font-semibold text-brand-200">{day.title || day.day || `Stop ${index + 1}`}</p><p className="mt-1 text-xs text-slate-400">{day.details || day.description || String(day)}</p></li>)}</ol></div>;
 }
