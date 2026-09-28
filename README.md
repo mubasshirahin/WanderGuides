@@ -10,7 +10,7 @@ npm --prefix server run migrate:ui
 npm --prefix server run seed
 ```
 
-The migration adds fields and a review table used by the current app. The seed command adds fictional Bangladesh guide listings and tour packages so the guide and tour pages have demo content. It is safe to run the seed command again; it updates/reuses those listings instead of duplicating them.
+The migration adds fields, itinerary and group-size booking data, saved guides, notifications, and review tables used by the current app. The seed command adds fictional Bangladesh guide listings and tour packages so the guide and tour pages have demo content. It is safe to run the seed command again; it updates/reuses those listings instead of duplicating them.
 
 Run the API and frontend in separate terminals:
 
@@ -25,7 +25,7 @@ npm --prefix client run dev
 Open the URL printed by Vite (normally `http://localhost:5173`).
 # Tourist experience additions
 
-After updating to this version, run the server migration once so existing SQL Server databases gain the tour image, payment status, and saved-tour tables:
+After updating to this version, run the server migration once so existing SQL Server databases gain tour itineraries, group-size/cancellation fields, saved tour/guide tables, and tourist notifications:
 
 ```powershell
 cd server
@@ -38,4 +38,4 @@ To load example guides and tour packages (including sample tour photos), run:
 npm run seed
 ```
 
-Tour availability checks block guide calendar dates and dates with pending or confirmed bookings. Payments are tracked as unpaid/paid/refunded; a payment gateway is not configured in this app yet.
+Tour availability checks block guide calendar dates and dates with pending or confirmed bookings. Tourist cancellations close 48 hours before the booked date. Payments are tracked as unpaid/paid/refunded; a payment gateway is not configured in this app yet.
