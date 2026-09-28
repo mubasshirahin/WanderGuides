@@ -9,7 +9,7 @@ export async function createTour(req, res) {
   const guideId = req.user?.id;
   if (!guideId) throw new AppError('Unauthorized', 401);
 
-  const { title, description, location, price, durationHours, maxGroupSize, imageUrl, category, difficulty, meetingPoint, highlights } = req.body || {};
+  const { title, description, location, price, durationHours, maxGroupSize, imageUrl, category, difficulty, meetingPoint, highlights, itinerary } = req.body || {};
 
   if (!title || price === undefined) {
     throw new AppError('title and price are required', 400);
@@ -24,12 +24,12 @@ export async function createTour(req, res) {
   }
 
   const rows = await query(
-    `INSERT INTO GuideTours (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize, ImageUrl, Category, Difficulty, MeetingPoint, Highlights)
+    `INSERT INTO GuideTours (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize, ImageUrl, Category, Difficulty, MeetingPoint, Highlights, Itinerary)
      OUTPUT INSERTED.Id, INSERTED.Title, INSERTED.Description, INSERTED.Location,
             INSERTED.Price, INSERTED.DurationHours, INSERTED.MaxGroupSize,
-            INSERTED.ImageUrl, INSERTED.Category, INSERTED.Difficulty, INSERTED.MeetingPoint, INSERTED.Highlights,
+            INSERTED.ImageUrl, INSERTED.Category, INSERTED.Difficulty, INSERTED.MeetingPoint, INSERTED.Highlights, INSERTED.Itinerary,
             INSERTED.IsActive, INSERTED.CreatedAt
-     VALUES (@guideId, @title, @description, @location, @price, @durationHours, @maxGroupSize, @imageUrl, @category, @difficulty, @meetingPoint, @highlights)`,
+     VALUES (@guideId, @title, @description, @location, @price, @durationHours, @maxGroupSize, @imageUrl, @category, @difficulty, @meetingPoint, @highlights, @itinerary)`,
     {
       guideId,
       title,
@@ -43,6 +43,7 @@ export async function createTour(req, res) {
       difficulty: difficulty || null,
       meetingPoint: meetingPoint || null,
       highlights: highlights || null,
+      itinerary: itinerary ? (typeof itinerary === 'string' ? itinerary : JSON.stringify(itinerary)) : null,
     }
   );
 

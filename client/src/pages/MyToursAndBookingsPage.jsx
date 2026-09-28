@@ -89,7 +89,7 @@ function ToastContainer({ toasts, onDismiss }) {
 
 function CreateTourForm({ onCreated, onClose }) {
   const [form, setForm] = useState({
-    title: '', description: '', location: '', price: '', duration: '', maxGroupSize: '', imageUrl: '', category: '', difficulty: '', meetingPoint: '', highlights: '',
+    title: '', description: '', location: '', price: '', duration: '', maxGroupSize: '', imageUrl: '', category: '', difficulty: '', meetingPoint: '', highlights: '', itinerary: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -110,6 +110,7 @@ function CreateTourForm({ onCreated, onClose }) {
           price: Number(form.price),
           durationHours: Number(form.duration) * 8,
           maxGroupSize: Number(form.maxGroupSize),
+          itinerary: form.itinerary.split('\n').map((line) => line.trim()).filter(Boolean).map((details, index) => ({ title: `Stop ${index + 1}`, details })),
         }),
       });
       const data = await res.json();
@@ -178,6 +179,11 @@ function CreateTourForm({ onCreated, onClose }) {
         <label className="block text-sm font-medium text-slate-300 mb-1">Highlights (comma separated)</label>
         <input name="highlights" value={form.highlights} onChange={handleChange} maxLength={1000} placeholder="Old town, local food, sunset view"
           className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-400" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-300 mb-1">Itinerary (one activity per line)</label>
+        <textarea name="itinerary" value={form.itinerary} onChange={handleChange} rows={4} maxLength={3000} placeholder={'Day 1: Old town walking tour\nLunch at a local restaurant\nSunset viewpoint'}
+          className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-400" />
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div>

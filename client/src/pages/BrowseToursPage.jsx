@@ -93,6 +93,7 @@ export default function BrowseToursPage({ role }) {
   const [bookingTour, setBookingTour] = useState(null);
   const [bookingDate, setBookingDate] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
+  const [bookingGroupSize, setBookingGroupSize] = useState(1);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
 
   useEffect(() => {
@@ -123,6 +124,7 @@ export default function BrowseToursPage({ role }) {
     setSelected(null);
     setBookingDate('');
     setBookingNotes('');
+    setBookingGroupSize(1);
     setBookingTour(tour);
   };
 
@@ -135,6 +137,7 @@ export default function BrowseToursPage({ role }) {
         method: 'POST',
         body: JSON.stringify({
           tourId: bookingTour.Id,
+          groupSize: Number(bookingGroupSize),
           startDate: bookingDate,
           endDate: bookingDate,
           notes: bookingNotes.trim() || undefined,
@@ -431,6 +434,8 @@ export default function BrowseToursPage({ role }) {
               </div>
             )}
 
+            {selected.Itinerary && <ItineraryPreview value={selected.Itinerary} />}
+
             {selected.Included && (
               <div className="mt-4">
                 <h4 className="mb-1 text-sm font-semibold text-slate-200">What's Included</h4>
@@ -509,6 +514,7 @@ export default function BrowseToursPage({ role }) {
               {availability === true && <p className="mt-1 text-xs text-emerald-300">This date is available.</p>}
               {availability === false && <p className="mt-1 text-xs text-red-300">This guide is already booked or unavailable on this date.</p>}
             </div>
+            <div><label className="mb-1 block text-xs text-slate-400">Group size (max {bookingTour.MaxGroupSize})</label><input type="number" min="1" max={bookingTour.MaxGroupSize} required value={bookingGroupSize} onChange={(event) => setBookingGroupSize(event.target.value)} className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white" /></div>
             <div>
               <label className="mb-1 block text-xs text-slate-400">Notes for the guide (optional)</label>
               <textarea
@@ -534,6 +540,13 @@ export default function BrowseToursPage({ role }) {
 }
 
 // ─── Tour card ───────────────────────────────────────────────────────
+function ItineraryPreview({ value }) {
+  let days = [];
+  try { days = Array.isArray(value) ? value : JSON.parse(value); } catch { return null; }
+  if (!Array.isArray(days) || !days.length) return null;
+  return <div className="mt-4"><h4 className="mb-2 text-sm font-semibold text-slate-200">Trip itinerary</h4><ol className="space-y-2">{days.map((day, index) => <li key={index} className="rounded-lg border border-white/10 bg-white/[0.03] p-3"><p className="text-xs font-semibold text-brand-200">{day.title || day.day || `Stop ${index + 1}`}</p><p className="mt-1 text-sm text-slate-400">{day.details || day.description || String(day)}</p></li>)}</ol></div>;
+}
+
 function TourCard({ tour: t, onView, onFavorite, isFavorite }) {
   return (
     <div className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-500/40 hover:bg-white/[0.05]">
