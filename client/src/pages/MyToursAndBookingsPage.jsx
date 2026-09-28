@@ -89,7 +89,7 @@ function ToastContainer({ toasts, onDismiss }) {
 
 function CreateTourForm({ onCreated, onClose }) {
   const [form, setForm] = useState({
-    title: '', description: '', location: '', price: '', duration: '', maxGroupSize: '',
+    title: '', description: '', location: '', price: '', duration: '', maxGroupSize: '', imageUrl: '', category: '', difficulty: '', meetingPoint: '', highlights: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -108,7 +108,7 @@ function CreateTourForm({ onCreated, onClose }) {
         body: JSON.stringify({
           ...form,
           price: Number(form.price),
-          duration: Number(form.duration),
+          durationHours: Number(form.duration) * 8,
           maxGroupSize: Number(form.maxGroupSize),
         }),
       });
@@ -148,6 +148,36 @@ function CreateTourForm({ onCreated, onClose }) {
             placeholder="e.g. Kyoto, Japan"
             className="w-full rounded-xl border border-white/10 bg-white/[0.06] pl-10 pr-4 py-2.5 text-sm text-white outline-none transition-all placeholder:text-slate-500 focus:border-brand-400 focus:bg-white/[0.1] focus:ring-4 focus:ring-brand-500/15" />
         </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-300 mb-1">Tour image URL (optional)</label>
+        <input name="imageUrl" type="url" value={form.imageUrl} onChange={handleChange} maxLength={1000}
+          placeholder="https://example.com/tour.jpg"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-400" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">Category</label>
+          <select name="category" value={form.category} onChange={handleChange} className="w-full rounded-xl border border-white/10 bg-ink-900 px-3 py-2.5 text-sm text-white">
+            <option value="">Choose category</option>{['Cultural','Adventure','Beach','Nature','Trekking','Food','Historical'].map((v) => <option key={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">Difficulty</label>
+          <select name="difficulty" value={form.difficulty} onChange={handleChange} className="w-full rounded-xl border border-white/10 bg-ink-900 px-3 py-2.5 text-sm text-white">
+            <option value="">Choose difficulty</option>{['Easy','Moderate','Hard'].map((v) => <option key={v}>{v}</option>)}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-300 mb-1">Meeting point</label>
+        <input name="meetingPoint" value={form.meetingPoint} onChange={handleChange} maxLength={255} placeholder="Starting point or landmark"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-400" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-300 mb-1">Highlights (comma separated)</label>
+        <input name="highlights" value={form.highlights} onChange={handleChange} maxLength={1000} placeholder="Old town, local food, sunset view"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-400" />
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div>

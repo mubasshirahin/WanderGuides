@@ -424,6 +424,8 @@ export async function browseTours(req, res) {
     minPrice,
     maxPrice,
     difficulty,
+    minRating,
+    sort = 'newest',
     page: requestedPage = 1,
     pageSize: requestedPageSize = 12,
   } = req.query;
@@ -432,15 +434,35 @@ export async function browseTours(req, res) {
   const pageSize = positiveInteger(requestedPageSize, 12, 100);
   const offset = (page - 1) * pageSize;
 
+  const availableDate = req.query.availableDate || null;
+  if (availableDate && (!/^\d{4}-\d{2}-\d{2}$/.test(availableDate) || Number.isNaN(Date.parse(`${availableDate}T00:00:00Z`)))) {
+    throw new AppError('availableDate must be a valid date', 400);
+  }
+  for (const [name, value] of [['minPrice', minPrice], ['maxPrice', maxPrice], ['minRating', minRating]]) {
+    if (value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0 || (name === 'minRating' && Number(value) > 5))) {
+      throw new AppError(`${name} is invalid`, 400);
+    }
+  }
+
+  const orderBy = {
+    newest: 'gt.CreatedAt DESC, gt.Id DESC',
+    price_asc: 'gt.Price ASC, gt.Id DESC',
+    price_desc: 'gt.Price DESC, gt.Id DESC',
+    rating: 'g.Rating DESC, g.TotalReviews DESC, gt.Id DESC',
+  }[sort] || 'gt.CreatedAt DESC, gt.Id DESC';
+
   const where = [
     'gt.IsActive = 1',
     'g.IsActive = 1',
     '(@location IS NULL OR gt.Location LIKE @location)',
-    '(@keyword IS NULL OR (gt.Title LIKE @keyword OR gt.Description LIKE @keyword OR gt.Highlights LIKE @keyword))',
+    '(@keyword IS NULL OR (gt.Title LIKE @keyword OR gt.Description LIKE @keyword OR gt.Highlights LIKE @keyword OR gt.Location LIKE @keyword OR gt.Category LIKE @keyword OR gt.Difficulty LIKE @keyword OR gt.MeetingPoint LIKE @keyword OR gt.Languages LIKE @keyword))',
     '(@category IS NULL OR gt.Category = @category)',
     '(@difficulty IS NULL OR gt.Difficulty = @difficulty)',
     '(@minPrice IS NULL OR gt.Price >= @minPrice)',
     '(@maxPrice IS NULL OR gt.Price <= @maxPrice)',
+    '(@minRating IS NULL OR g.Rating >= @minRating)',
+    '(@availableDate IS NULL OR NOT EXISTS (SELECT 1 FROM GuideAvailability ga WHERE ga.GuideId = gt.GuideId AND ga.BlockedDate = @availableDate))',
+    '(@availableDate IS NULL OR NOT EXISTS (SELECT 1 FROM Bookings b WHERE b.GuideId = gt.GuideId AND b.Status IN (\'pending\',\'confirmed\') AND b.StartDate <= @availableDate AND b.EndDate >= @availableDate))',
   ].join(' AND ');
 
   const base = `
@@ -454,13 +476,13 @@ export async function browseTours(req, res) {
     SELECT
       gt.Id, gt.Title, gt.Description, gt.Location, gt.Price,
       gt.DurationHours, gt.MaxGroupSize, gt.Category, gt.Difficulty,
-      gt.MeetingPoint, gt.Included, gt.Highlights, gt.Languages, gt.CreatedAt,
+      gt.MeetingPoint, gt.Included, gt.Highlights, gt.Languages, gt.ImageUrl, gt.CreatedAt,
       g.Id AS GuideProfileId, g.UserID AS GuideUserId,
       g.FullName AS GuideName, g.City AS GuideCity,
       g.Rating AS GuideRating, g.TotalReviews AS GuideReviews, g.HourlyRate, g.DailyRate,
       u.AvatarUrl AS GuideAvatar
     ${base}
-    ORDER BY gt.CreatedAt DESC
+    ORDER BY ${orderBy}
     OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
   `;
   const countSql = `SELECT COUNT(*) AS total ${base}`;
@@ -472,6 +494,8 @@ export async function browseTours(req, res) {
     difficulty: difficulty || null,
     minPrice: minPrice === undefined ? null : Number(minPrice),
     maxPrice: maxPrice === undefined ? null : Number(maxPrice),
+    minRating: minRating === undefined ? null : Number(minRating),
+    availableDate,
     offset,
     pageSize,
   };
@@ -480,6 +504,26 @@ export async function browseTours(req, res) {
   const total = Number(countRow[0]?.total || 0);
 
   res.json({ ok: true, tours, page, pageSize, total });
+}
+
+export async function checkTourAvailability(req, res) {
+  const tourId = Number(req.params.tourId);
+  const date = String(req.query.date || '');
+  if (!Number.isInteger(tourId) || tourId <= 0) throw new AppError('Invalid tour ID', 400);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+    throw new AppError('A valid date is required', 400);
+  }
+  const rows = await query(
+    `SELECT gt.Id,
+       CASE WHEN gt.IsActive = 1 AND g.IsActive = 1
+         AND NOT EXISTS (SELECT 1 FROM GuideAvailability ga WHERE ga.GuideId = gt.GuideId AND ga.BlockedDate = @date)
+         AND NOT EXISTS (SELECT 1 FROM Bookings b WHERE b.GuideId = gt.GuideId AND b.Status IN ('pending','confirmed') AND b.StartDate <= @date AND b.EndDate >= @date)
+       THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsAvailable
+     FROM GuideTours gt INNER JOIN Guides g ON g.UserID = gt.GuideId
+     WHERE gt.Id = @tourId`, { tourId, date }
+  );
+  if (!rows.length) throw new AppError('Tour not found', 404);
+  res.json({ ok: true, available: Boolean(rows[0].IsAvailable), date });
 }
 
 /**

@@ -9,18 +9,27 @@ export async function createTour(req, res) {
   const guideId = req.user?.id;
   if (!guideId) throw new AppError('Unauthorized', 401);
 
-  const { title, description, location, price, durationHours, maxGroupSize } = req.body || {};
+  const { title, description, location, price, durationHours, maxGroupSize, imageUrl, category, difficulty, meetingPoint, highlights } = req.body || {};
 
   if (!title || price === undefined) {
     throw new AppError('title and price are required', 400);
   }
+  if (imageUrl) {
+    try {
+      const parsedImageUrl = new URL(imageUrl);
+      if (!['http:', 'https:'].includes(parsedImageUrl.protocol)) throw new Error('invalid protocol');
+    } catch {
+      throw new AppError('imageUrl must be a valid http(s) URL', 400);
+    }
+  }
 
   const rows = await query(
-    `INSERT INTO GuideTours (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize)
+    `INSERT INTO GuideTours (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize, ImageUrl, Category, Difficulty, MeetingPoint, Highlights)
      OUTPUT INSERTED.Id, INSERTED.Title, INSERTED.Description, INSERTED.Location,
             INSERTED.Price, INSERTED.DurationHours, INSERTED.MaxGroupSize,
+            INSERTED.ImageUrl, INSERTED.Category, INSERTED.Difficulty, INSERTED.MeetingPoint, INSERTED.Highlights,
             INSERTED.IsActive, INSERTED.CreatedAt
-     VALUES (@guideId, @title, @description, @location, @price, @durationHours, @maxGroupSize)`,
+     VALUES (@guideId, @title, @description, @location, @price, @durationHours, @maxGroupSize, @imageUrl, @category, @difficulty, @meetingPoint, @highlights)`,
     {
       guideId,
       title,
@@ -29,6 +38,11 @@ export async function createTour(req, res) {
       price: Number(price),
       durationHours: Number(durationHours) || 8,
       maxGroupSize: Number(maxGroupSize) || 10,
+      imageUrl: imageUrl || null,
+      category: category || null,
+      difficulty: difficulty || null,
+      meetingPoint: meetingPoint || null,
+      highlights: highlights || null,
     }
   );
 
