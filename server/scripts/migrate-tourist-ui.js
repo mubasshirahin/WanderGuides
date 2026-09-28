@@ -36,6 +36,20 @@ const statements = [
   `IF COL_LENGTH('GuideTours', 'Included') IS NULL ALTER TABLE GuideTours ADD Included NVARCHAR(MAX) NULL`,
   `IF COL_LENGTH('GuideTours', 'Highlights') IS NULL ALTER TABLE GuideTours ADD Highlights NVARCHAR(MAX) NULL`,
   `IF COL_LENGTH('GuideTours', 'Languages') IS NULL ALTER TABLE GuideTours ADD Languages NVARCHAR(255) NULL`,
+  `IF COL_LENGTH('GuideTours', 'ImageUrl') IS NULL ALTER TABLE GuideTours ADD ImageUrl NVARCHAR(1000) NULL`,
+  `IF COL_LENGTH('Bookings', 'PaymentStatus') IS NULL ALTER TABLE Bookings ADD PaymentStatus NVARCHAR(20) NOT NULL CONSTRAINT DF_Bookings_PaymentStatus_UI DEFAULT 'unpaid'`,
+  `IF OBJECT_ID('TouristFavorites', 'U') IS NULL
+   CREATE TABLE TouristFavorites (
+     Id INT IDENTITY PRIMARY KEY,
+     TouristUserId INT NOT NULL,
+     GuideTourId INT NOT NULL,
+     CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+     CONSTRAINT FK_TouristFavorites_User_UI FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+     CONSTRAINT FK_TouristFavorites_Tour_UI FOREIGN KEY (GuideTourId) REFERENCES GuideTours(Id) ON DELETE CASCADE,
+     CONSTRAINT UQ_TouristFavorites_UserTour_UI UNIQUE (TouristUserId, GuideTourId)
+   )`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CHK_Bookings_PaymentStatus_UI')
+   ALTER TABLE Bookings ADD CONSTRAINT CHK_Bookings_PaymentStatus_UI CHECK (PaymentStatus IN ('unpaid','paid','refunded'))`,
 
   // Guides can leave a review for tourists after a completed booking.
   `IF OBJECT_ID('GuideReviewsOfTourists', 'U') IS NULL
@@ -62,7 +76,7 @@ async function run() {
     for (const statement of statements) {
       await pool.request().query(statement);
     }
-    console.log('[migration] Tourist profile, tour package, and guide directory schema is up to date.');
+    console.log('[migration] Tourist profiles, tour packages, guide directory, favorites, and payment status schema are up to date.');
   } catch (error) {
     console.error('[migration] Failed:', error.message);
     process.exitCode = 1;

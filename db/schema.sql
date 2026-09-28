@@ -39,6 +39,7 @@ CREATE TABLE Bookings (
     BookingType   NVARCHAR(20) NOT NULL DEFAULT 'direct' CHECK (BookingType IN ('direct','bid_accepted')),
     TotalAmount   DECIMAL(10,2) NOT NULL,
     FinalPrice    DECIMAL(10,2) NULL,
+    PaymentStatus NVARCHAR(20) NOT NULL DEFAULT 'unpaid' CHECK (PaymentStatus IN ('unpaid','paid','refunded')),
     Notes         NVARCHAR(500) NULL,
     CreatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
 
@@ -273,6 +274,7 @@ CREATE TABLE GuideTours (
     Category      NVARCHAR(100) NULL,
     Difficulty    NVARCHAR(50) NULL,
     MeetingPoint  NVARCHAR(255) NULL,
+    ImageUrl      NVARCHAR(1000) NULL,
     Included      NVARCHAR(MAX) NULL,
     Highlights    NVARCHAR(MAX) NULL,
     Languages     NVARCHAR(255) NULL,
@@ -288,6 +290,17 @@ CREATE TABLE GuideTours (
 
 CREATE INDEX IX_GuideTours_Guide ON GuideTours(GuideId);
 CREATE INDEX IX_GuideTours_Active ON GuideTours(IsActive);
+
+CREATE TABLE TouristFavorites (
+    Id INT IDENTITY PRIMARY KEY,
+    TouristUserId INT NOT NULL,
+    GuideTourId INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_TouristFavorites_User FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_TouristFavorites_Tour FOREIGN KEY (GuideTourId) REFERENCES GuideTours(Id) ON DELETE CASCADE,
+    CONSTRAINT UQ_TouristFavorites_UserTour UNIQUE (TouristUserId, GuideTourId)
+);
+CREATE INDEX IX_TouristFavorites_User ON TouristFavorites(TouristUserId);
 
 -- =============================================
 -- Bids Table Schema
