@@ -311,7 +311,7 @@ CREATE TABLE TouristFavoriteGuides (
     GuideUserId INT NOT NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     CONSTRAINT FK_TouristFavoriteGuides_Tourist FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE,
-    CONSTRAINT FK_TouristFavoriteGuides_Guide FOREIGN KEY (GuideUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_TouristFavoriteGuides_Guide FOREIGN KEY (GuideUserId) REFERENCES Users(Id),
     CONSTRAINT UQ_TouristFavoriteGuides_Pair UNIQUE (TouristUserId, GuideUserId)
 );
 CREATE INDEX IX_TouristFavoriteGuides_Tourist ON TouristFavoriteGuides(TouristUserId);
