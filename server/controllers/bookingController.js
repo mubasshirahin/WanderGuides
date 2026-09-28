@@ -61,6 +61,7 @@ export const getAllBookings = async (req, res) => {
       b.EndDate,
       b.Status,
       b.TotalAmount,
+      b.PaymentStatus,
       b.Notes,
       b.CreatedAt,
       tourist.FullName AS TouristName,
@@ -182,7 +183,7 @@ export const createBooking = async (req, res) => {
 
   const insertSql = `
     INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, BookingType, TotalAmount, FinalPrice, Notes)
-    OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate, INSERTED.EndDate, INSERTED.Status, INSERTED.BookingType, INSERTED.TotalAmount, INSERTED.FinalPrice, INSERTED.Notes, INSERTED.CreatedAt
+    OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate, INSERTED.EndDate, INSERTED.Status, INSERTED.BookingType, INSERTED.TotalAmount, INSERTED.FinalPrice, INSERTED.PaymentStatus, INSERTED.Notes, INSERTED.CreatedAt
     VALUES (@touristId, @guideUserId, @startDate, @endDate, 'pending', 'direct', @totalAmount, @totalAmount, @notes)
   `;
 

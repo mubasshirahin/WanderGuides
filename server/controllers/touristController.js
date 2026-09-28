@@ -16,7 +16,7 @@ export async function getDashboard(req, res) {
        SUM(CASE WHEN Status IN ('pending','confirmed') THEN 1 ELSE 0 END) AS upcomingTours,
        SUM(CASE WHEN Status = 'completed' THEN 1 ELSE 0 END) AS completedTours,
        SUM(CASE WHEN Status = 'cancelled' THEN 1 ELSE 0 END) AS cancelledTours,
-       ISNULL(SUM(CASE WHEN Status != 'cancelled' THEN TotalAmount ELSE 0 END), 0) AS totalSpent,
+       ISNULL(SUM(CASE WHEN Status != 'cancelled' AND PaymentStatus = 'paid' THEN TotalAmount ELSE 0 END), 0) AS totalSpent,
        MIN(TotalAmount) AS cheapestBooking,
        MAX(TotalAmount) AS mostExpensiveBooking
      FROM Bookings
@@ -37,7 +37,7 @@ export async function getDashboard(req, res) {
   // 2. Next upcoming tour (earliest pending/confirmed booking)
   const nextTourRows = await query(
     `SELECT TOP 1
-       b.Id, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.Notes, b.CreatedAt,
+       b.Id, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
        u.FullName AS GuideName, u.AvatarUrl AS GuideAvatar, u.Phone AS GuidePhone,
        g.City AS GuideCity, g.Specialties AS GuideSpecialties, g.Rating AS GuideRating
      FROM Bookings b
@@ -55,7 +55,7 @@ export async function getDashboard(req, res) {
   // 3. All bookings (for tabbed list)
   const bookingsRows = await query(
     `SELECT
-       b.Id, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.Notes, b.CreatedAt,
+       b.Id, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
        u.FullName AS GuideName, u.AvatarUrl AS GuideAvatar,
        g.City AS GuideCity, g.Rating AS GuideRating, g.Specialties AS GuideSpecialties
      FROM Bookings b
