@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, MapPin, Star, X, Filter, Loader2, Clock, Users,
-  CalendarDays, CheckCircle, AlertCircle, Mountain, Tag, Compass, MessageCircle
+  CalendarDays, CheckCircle, AlertCircle, Mountain, Tag, Compass, MessageCircle, Heart, ExternalLink
 } from 'lucide-react';
 import { authFetch } from '../lib/demoAuth.js';
 import { startConversation } from '../lib/chat.js';
@@ -78,6 +78,12 @@ export default function BrowseToursPage({ role }) {
   const [difficulty, setDifficulty] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [minRating, setMinRating] = useState('');
+  const [availableDate, setAvailableDate] = useState('');
+  const [sort, setSort] = useState('newest');
+  const [favorites, setFavorites] = useState([]);
+  const [showingFavorites, setShowingFavorites] = useState(false);
+  const [availability, setAvailability] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -88,6 +94,24 @@ export default function BrowseToursPage({ role }) {
   const [bookingDate, setBookingDate] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (role !== 'tourist') return;
+    authFetch('/api/tourist/favorites').then((res) => res.json()).then((data) => {
+      if (data.ok) setFavorites((data.tours || []).map((tour) => Number(tour.Id)));
+    }).catch(() => {});
+  }, [role]);
+
+  useEffect(() => {
+    if (!bookingTour || !bookingDate) { setAvailability(null); return; }
+    let active = true;
+    setAvailability('checking');
+    fetch(`/api/guides/tours/${bookingTour.Id}/availability?date=${encodeURIComponent(bookingDate)}`)
+      .then((res) => res.json())
+      .then((data) => { if (active) setAvailability(data.ok && data.available); })
+      .catch(() => { if (active) setAvailability(false); });
+    return () => { active = false; };
+  }, [bookingTour, bookingDate]);
 
   const flash = useCallback((message, kind = 'success') => {
     setNotice({ message, kind });
@@ -104,7 +128,7 @@ export default function BrowseToursPage({ role }) {
 
   const bookTour = async (event) => {
     event.preventDefault();
-    if (!bookingTour || !bookingDate) return;
+    if (!bookingTour || !bookingDate || availability !== true) return;
     setBookingSubmitting(true);
     try {
       const res = await authFetch('/api/bookings/direct', {
@@ -142,6 +166,14 @@ export default function BrowseToursPage({ role }) {
     setLoading(true);
     setError(null);
     try {
+      if (showingFavorites) {
+        const response = await authFetch('/api/tourist/favorites');
+        const saved = await response.json();
+        if (!response.ok || !saved.ok) throw new Error(saved.message || 'Failed to load saved tours');
+        setTours(saved.tours || []);
+        setTotal(saved.tours?.length || 0);
+        return;
+      }
       const params = new URLSearchParams();
       if (location) params.set('location', location);
       if (keyword) params.set('keyword', keyword);
@@ -149,6 +181,9 @@ export default function BrowseToursPage({ role }) {
       if (difficulty) params.set('difficulty', difficulty);
       if (minPrice) params.set('minPrice', minPrice);
       if (maxPrice) params.set('maxPrice', maxPrice);
+      if (minRating) params.set('minRating', minRating);
+      if (availableDate) params.set('availableDate', availableDate);
+      params.set('sort', sort);
       params.set('page', opts.page || page);
       params.set('pageSize', String(pageSize));
 
@@ -162,7 +197,20 @@ export default function BrowseToursPage({ role }) {
     } finally {
       setLoading(false);
     }
-  }, [location, keyword, category, difficulty, minPrice, maxPrice, page]);
+  }, [location, keyword, category, difficulty, minPrice, maxPrice, minRating, availableDate, sort, page, showingFavorites]);
+
+  const toggleFavorite = async (tour) => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to save tours.', 'error');
+    const isSaved = favorites.includes(Number(tour.Id));
+    try {
+      const response = await authFetch(`/api/tourist/favorites/${tour.Id}`, { method: isSaved ? 'DELETE' : 'PUT' });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Could not update saved tours');
+      setFavorites((ids) => isSaved ? ids.filter((id) => id !== Number(tour.Id)) : [...ids, Number(tour.Id)]);
+      if (showingFavorites && isSaved) setTours((items) => items.filter((item) => Number(item.Id) !== Number(tour.Id)));
+      flash(isSaved ? 'Removed from saved tours.' : 'Tour saved to your favorites.');
+    } catch (err) { flash(err.message, 'error'); }
+  };
 
   useEffect(() => {
     const t = setTimeout(() => fetchTours({ page: 1 }), keyword ? 300 : 0);
@@ -175,9 +223,16 @@ export default function BrowseToursPage({ role }) {
     <div>
       <PageHeader
         eyebrow="Browse & Book"
-        title="Browse Tour Packages"
-        description="Discover amazing tour packages from verified local guides. Filter by location, category, price, and more."
+        title={showingFavorites ? 'Saved Tour Packages' : 'Browse Tour Packages'}
+        description={showingFavorites ? 'Your saved tours, ready when you are.' : 'Discover amazing tour packages from verified local guides. Filter by location, category, price, date, and rating.'}
       />
+
+      <div className="mb-4 flex justify-end">
+        <button type="button" onClick={() => { if (role !== 'tourist') return flash('Sign in as a tourist to view saved tours.', 'error'); setShowingFavorites((value) => !value); setPage(1); }}
+          className={`rounded-xl border px-4 py-2 text-sm font-medium ${showingFavorites ? 'border-brand-400 bg-brand-500/15 text-brand-200' : 'border-white/10 bg-white/[0.06] text-slate-200'}`}>
+          {showingFavorites ? 'Browse all tours' : 'Saved tours'}
+        </button>
+      </div>
 
       {notice && (
         <div
@@ -212,6 +267,10 @@ export default function BrowseToursPage({ role }) {
           <Filter className="h-4 w-4" />
           Filters
         </button>
+        <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }} aria-label="Sort tours"
+          className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white">
+          <option value="newest">Newest</option><option value="rating">Top rated</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option>
+        </select>
       </div>
 
       {/* Layout: sidebar (desktop) / grid */}
@@ -220,11 +279,13 @@ export default function BrowseToursPage({ role }) {
         <aside className="hidden space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:block">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Filters</h3>
           <TourFilterPanel
-            location={location} setLocation={setLocation}
-            category={category} setCategory={setCategory}
-            difficulty={difficulty} setDifficulty={setDifficulty}
-            minPrice={minPrice} setMinPrice={setMinPrice}
-            maxPrice={maxPrice} setMaxPrice={setMaxPrice}
+            location={location} setLocation={(value) => { setLocation(value); setPage(1); }}
+            category={category} setCategory={(value) => { setCategory(value); setPage(1); }}
+            difficulty={difficulty} setDifficulty={(value) => { setDifficulty(value); setPage(1); }}
+            minPrice={minPrice} setMinPrice={(value) => { setMinPrice(value); setPage(1); }}
+            maxPrice={maxPrice} setMaxPrice={(value) => { setMaxPrice(value); setPage(1); }}
+            minRating={minRating} setMinRating={(value) => { setMinRating(value); setPage(1); }}
+            availableDate={availableDate} setAvailableDate={(value) => { setAvailableDate(value); setPage(1); }}
           />
         </aside>
 
@@ -249,7 +310,7 @@ export default function BrowseToursPage({ role }) {
           {!loading && !error && tours.length === 0 && (
             <div className="rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.03] px-6 py-16 text-center">
               <Compass className="mx-auto mb-4 h-10 w-10 text-slate-500" />
-              <p className="text-slate-400">No tours match your filters. Try widening the search.</p>
+              <p className="text-slate-400">{showingFavorites ? 'No saved tours yet. Browse packages and tap the heart to save one.' : 'No tours match your filters. Try widening the search.'}</p>
             </div>
           )}
 
@@ -257,7 +318,7 @@ export default function BrowseToursPage({ role }) {
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {tours.map((t) => (
-                  <TourCard key={t.Id} tour={t} onView={setSelected} />
+                  <TourCard key={t.Id} tour={t} onView={setSelected} onFavorite={toggleFavorite} isFavorite={favorites.includes(Number(t.Id))} />
                 ))}
               </div>
 
@@ -297,11 +358,13 @@ export default function BrowseToursPage({ role }) {
               </button>
             </div>
             <TourFilterPanel
-              location={location} setLocation={setLocation}
-              category={category} setCategory={setCategory}
-              difficulty={difficulty} setDifficulty={setDifficulty}
-              minPrice={minPrice} setMinPrice={setMinPrice}
-              maxPrice={maxPrice} setMaxPrice={setMaxPrice}
+              location={location} setLocation={(value) => { setLocation(value); setPage(1); }}
+              category={category} setCategory={(value) => { setCategory(value); setPage(1); }}
+              difficulty={difficulty} setDifficulty={(value) => { setDifficulty(value); setPage(1); }}
+              minPrice={minPrice} setMinPrice={(value) => { setMinPrice(value); setPage(1); }}
+              maxPrice={maxPrice} setMaxPrice={(value) => { setMaxPrice(value); setPage(1); }}
+              minRating={minRating} setMinRating={(value) => { setMinRating(value); setPage(1); }}
+              availableDate={availableDate} setAvailableDate={(value) => { setAvailableDate(value); setPage(1); }}
             />
             <button
               onClick={() => setFilterOpen(false)}
@@ -317,6 +380,7 @@ export default function BrowseToursPage({ role }) {
       {selected && (
         <Modal onClose={() => setSelected(null)} maxWidth="max-w-2xl">
           <div>
+            {selected.ImageUrl && <img src={selected.ImageUrl} alt={selected.Title} className="mb-4 h-52 w-full rounded-xl object-cover" />}
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-bold text-white">{selected.Title}</h2>
@@ -360,6 +424,10 @@ export default function BrowseToursPage({ role }) {
               <div className="mt-4">
                 <h4 className="mb-1 text-sm font-semibold text-slate-200">Meeting Point</h4>
                 <p className="text-sm text-slate-300">{selected.MeetingPoint}</p>
+                <a className="mt-2 inline-flex items-center gap-1 text-xs text-brand-300 hover:text-brand-200" target="_blank" rel="noreferrer"
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${selected.MeetingPoint}, ${selected.Location || ''}`)}`}>
+                  <MapPin className="h-3.5 w-3.5" /> Get directions in Maps <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
             )}
 
@@ -437,6 +505,9 @@ export default function BrowseToursPage({ role }) {
                 onChange={(event) => setBookingDate(event.target.value)}
                 className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400"
               />
+              {availability === 'checking' && <p className="mt-1 text-xs text-slate-400">Checking guide availability…</p>}
+              {availability === true && <p className="mt-1 text-xs text-emerald-300">This date is available.</p>}
+              {availability === false && <p className="mt-1 text-xs text-red-300">This guide is already booked or unavailable on this date.</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs text-slate-400">Notes for the guide (optional)</label>
@@ -450,7 +521,7 @@ export default function BrowseToursPage({ role }) {
             </div>
             <button
               type="submit"
-              disabled={bookingSubmitting}
+              disabled={bookingSubmitting || availability !== true}
               className="w-full rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-60"
             >
               {bookingSubmitting ? 'Sending booking…' : `Request booking · ${currency(bookingTour.Price)}`}
@@ -463,9 +534,17 @@ export default function BrowseToursPage({ role }) {
 }
 
 // ─── Tour card ───────────────────────────────────────────────────────
-function TourCard({ tour: t, onView }) {
+function TourCard({ tour: t, onView, onFavorite, isFavorite }) {
   return (
     <div className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-500/40 hover:bg-white/[0.05]">
+      <div className="relative -mx-5 -mt-5 mb-4 h-36 overflow-hidden rounded-t-2xl bg-gradient-to-br from-brand-800/70 via-slate-800 to-teal-900/70">
+        {t.ImageUrl && <img src={t.ImageUrl} alt={t.Title} loading="lazy" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />}
+        <div className="absolute inset-0 bg-gradient-to-t from-ink-950/60 to-transparent" />
+        <button type="button" onClick={() => onFavorite(t)} aria-label={isFavorite ? 'Remove saved tour' : 'Save tour'}
+          className="absolute right-3 top-3 rounded-full border border-white/20 bg-ink-950/70 p-2 text-white backdrop-blur hover:text-rose-300">
+          <Heart className={`h-4 w-4 ${isFavorite ? 'fill-rose-400 text-rose-400' : ''}`} />
+        </button>
+      </div>
       <div className="flex items-start justify-between">
         <span className="rounded-full bg-brand-500/15 px-2.5 py-0.5 text-xs font-medium text-brand-300">
           {t.Category || 'Tour'}
@@ -524,7 +603,7 @@ function TourCard({ tour: t, onView }) {
 }
 
 // ─── Filter panel ────────────────────────────────────────────────────
-function TourFilterPanel({ location, setLocation, category, setCategory, difficulty, setDifficulty, minPrice, setMinPrice, maxPrice, setMaxPrice }) {
+function TourFilterPanel({ location, setLocation, category, setCategory, difficulty, setDifficulty, minPrice, setMinPrice, maxPrice, setMaxPrice, minRating, setMinRating, availableDate, setAvailableDate }) {
   return (
     <>
       <div>
@@ -563,6 +642,19 @@ function TourFilterPanel({ location, setLocation, category, setCategory, difficu
           <option value="">Any difficulty</option>
           {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-slate-400">Minimum guide rating</label>
+        <select value={minRating} onChange={(e) => setMinRating(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white">
+          <option value="">Any rating</option><option value="3">3+ stars</option><option value="4">4+ stars</option><option value="4.5">4.5+ stars</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-slate-400">Available on</label>
+        <input type="date" min={new Date().toLocaleDateString('en-CA')} value={availableDate} onChange={(e) => setAvailableDate(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white" />
       </div>
 
       <div>
