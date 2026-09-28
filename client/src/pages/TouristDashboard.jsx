@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   LayoutDashboard, CalendarDays, MapPin, DollarSign, Star, Clock,
   CheckCircle, XCircle, Loader2, Phone, MessageSquare, X, Menu,
-  Search, ChevronRight, AlertTriangle, User
+  Search, ChevronRight, AlertTriangle, User, Bell
 } from 'lucide-react';
 import { authFetch } from '../lib/demoAuth.js';
 
@@ -124,6 +124,7 @@ export default function TouristDashboard() {
   }
 
   const { user, stats, nextTour, bookings } = data || {};
+  const confirmedBooking = bookings?.find((booking) => booking.Status === 'confirmed');
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] gap-0">
@@ -188,6 +189,18 @@ export default function TouristDashboard() {
           </div>
 
           {/* ─── Priority Banner: Next Upcoming Tour ─────── */}
+          {confirmedBooking && (
+            <div className="flex items-start gap-3 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4 text-sm text-emerald-100" role="status">
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+              <p><strong>Booking confirmed:</strong> {confirmedBooking.GuideName} confirmed your trip for {formatDate(confirmedBooking.StartDate)}. Review the details below.</p>
+            </div>
+          )}
+          {nextTour && daysUntil(nextTour.StartDate) >= 0 && daysUntil(nextTour.StartDate) <= 7 && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100" role="status">
+              <Bell className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <p><strong>Trip reminder:</strong> your tour with {nextTour.GuideName} is {daysUntil(nextTour.StartDate) === 0 ? 'today' : `in ${daysUntil(nextTour.StartDate)} day(s)`}. Check the date and coordinate with your guide.</p>
+            </div>
+          )}
           {nextTour && <NextTourBanner tour={nextTour} onCancel={handleCancel} cancellingId={cancellingId} />}
 
           {/* ─── Tabbed Booking List ─────────────────────── */}
@@ -335,6 +348,7 @@ function NextTourBanner({ tour, onCancel, cancellingId }) {
         <InfoPill icon={Star} label="Rating" value={tour.GuideRating ? Number(tour.GuideRating).toFixed(1) : 'N/A'} />
         <InfoPill icon={CalendarDays} label="Dates" value={`${formatDate(tour.StartDate)} — ${formatDate(tour.EndDate)}`} />
         <InfoPill icon={DollarSign} label="Cost" value={`৳${Number(tour.TotalAmount).toFixed(2)}`} />
+        <InfoPill icon={DollarSign} label="Payment" value={tour.PaymentStatus || 'unpaid'} capitalize />
         <InfoPill icon={Clock} label="Status" value={tour.Status} capitalize />
       </div>
 
@@ -347,6 +361,12 @@ function NextTourBanner({ tour, onCancel, cancellingId }) {
           ))}
         </div>
       )}
+
+      <a target="_blank" rel="noreferrer"
+        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(tour.GuideCity || '')}`}
+        className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-brand-300 hover:text-brand-200">
+        <MapPin className="h-3.5 w-3.5" /> Open destination in Maps
+      </a>
 
       <div className="mt-5 flex flex-wrap gap-3">
         {tour.Status !== 'cancelled' && tour.Status !== 'completed' && (
@@ -446,6 +466,9 @@ function BookingRow({ booking: b, onCancel, cancellingId }) {
       {/* Amount */}
       <div className="text-sm font-semibold text-white sm:w-24 sm:text-right">
         ৳{Number(b.TotalAmount).toFixed(2)}
+        <span className={`mt-1 block text-[10px] font-medium capitalize ${b.PaymentStatus === 'paid' ? 'text-emerald-300' : 'text-amber-300'}`}>
+          {b.PaymentStatus || 'unpaid'}
+        </span>
       </div>
 
       {/* Actions */}
