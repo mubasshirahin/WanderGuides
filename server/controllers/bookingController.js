@@ -2,7 +2,6 @@ import { query } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 
 const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'completed', 'cancelled']);
-const GUIDE_STATUS_UPDATES = new Set(['confirmed', 'completed']);
 const TOURIST_STATUS_UPDATES = new Set(['cancelled']);
 
 function parseBookingId(id) {
@@ -89,14 +88,14 @@ export const getAllBookings = async (req, res) => {
 
 /** POST /api/bookings - placeholder. Validate availability + insert here. */
 export const createBooking = async (req, res) => {
-  const { guideId, startDate, endDate, notes } = req.body || {};
+  const { guideId, tourId, startDate, endDate, notes } = req.body || {};
 
   // tourist id should come from authenticated token
   const touristId = req.user && req.user.id;
   if (!touristId) throw new AppError('Unauthorized', 401);
 
-  if (!guideId || !startDate || !endDate) {
-    throw new AppError('guideId, startDate and endDate are required', 400);
+  if ((!guideId && !tourId) || !startDate || !endDate) {
+    throw new AppError('guideId or tourId, startDate and endDate are required', 400);
   }
 
   const sDate = new Date(startDate);
@@ -107,10 +106,37 @@ export const createBooking = async (req, res) => {
 
   if (eDate < sDate) throw new AppError('endDate must be on or after startDate', 400);
 
-  // Verify guide exists and get rate + linked user (Bookings.GuideId -> Users.Id).
-  const guideRow =
-    (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE Id = @id', { id: guideId }))[0] ||
-    (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE UserID = @id', { id: guideId }))[0];
+  let guideRow;
+  let tourTitle = null;
+  let packagePrice = null;
+
+  if (tourId) {
+    if (sDate.getTime() !== eDate.getTime()) {
+      throw new AppError('Tour package bookings must be for a single date', 400);
+    }
+    const tourRows = await query(
+      `SELECT gt.GuideId AS UserID, gt.Title, gt.Price,
+              COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate
+       FROM GuideTours gt
+       INNER JOIN Guides g ON g.UserID = gt.GuideId
+       WHERE gt.Id = @tourId AND gt.IsActive = 1 AND g.IsActive = 1`,
+      { tourId }
+    );
+    guideRow = tourRows[0];
+    if (guideRow) {
+      tourTitle = guideRow.Title;
+      packagePrice = Number(guideRow.Price);
+    }
+    if (!guideRow) throw new AppError('Tour package is unavailable', 404);
+    if (guideId && Number(guideId) !== Number(guideRow.UserID)) {
+      throw new AppError('Tour package does not belong to this guide', 400);
+    }
+  } else {
+    // Prefer the account ID used by the API; fall back to a directory profile ID.
+    guideRow =
+      (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE UserID = @id AND IsActive = 1', { id: guideId }))[0] ||
+      (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE Id = @id AND IsActive = 1', { id: guideId }))[0];
+  }
   if (!guideRow) throw new AppError('Guide not found', 404);
   const guideUserId = guideRow.UserID;
   if (!guideUserId) throw new AppError('This guide is not linked to an account yet', 409);
@@ -146,7 +172,13 @@ export const createBooking = async (req, res) => {
   // Calculate total amount (inclusive days)
   const msPerDay = 24 * 60 * 60 * 1000;
   const days = Math.round((eDate - sDate) / msPerDay) + 1;
-  const totalAmount = Number((ratePerDay * days).toFixed(2));
+  const totalAmount = packagePrice === null
+    ? Number((ratePerDay * days).toFixed(2))
+    : Number(packagePrice.toFixed(2));
+  const bookingNotes = [tourTitle ? `Tour package: ${tourTitle}` : null, notes?.trim() || null]
+    .filter(Boolean)
+    .join(' — ')
+    .slice(0, 500) || null;
 
   const insertSql = `
     INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, BookingType, TotalAmount, FinalPrice, Notes)
@@ -160,7 +192,7 @@ export const createBooking = async (req, res) => {
     startDate,
     endDate,
     totalAmount,
-    notes: notes || null,
+    notes: bookingNotes,
   };
 
   try {
@@ -191,11 +223,16 @@ export function createUpdateBookingStatus(queryFn = query) {
     if (!booking) throw new AppError('Booking not found', 404);
 
     if (role === 'guide') {
-      if (!GUIDE_STATUS_UPDATES.has(status)) {
-        throw new AppError("Guides can only set bookings to 'confirmed' or 'completed'", 400);
-      }
       if (Number(booking.GuideId) !== Number(userId)) {
         throw new AppError('Forbidden', 403);
+      }
+      const currentStatus = String(booking.Status).toLowerCase();
+      const validGuideTransition =
+        (status === 'confirmed' && currentStatus === 'pending') ||
+        (status === 'completed' && currentStatus === 'confirmed') ||
+        (status === 'cancelled' && currentStatus === 'pending');
+      if (!validGuideTransition) {
+        throw new AppError('Guides can confirm or decline pending bookings, then mark confirmed tours completed', 400);
       }
     }
 

@@ -282,7 +282,10 @@ export default function MyToursAndBookingsPage() {
       const res = await authFetch(`/api/guide/tours/${tour.Id}/responses`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to load responses');
-      setResponses(data.responses || data.bookings || []);
+      setResponses((data.responses || data.bookings || []).map((row) => ({
+        ...row,
+        Id: row.Id ?? row.BookingId,
+      })));
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
@@ -292,8 +295,9 @@ export default function MyToursAndBookingsPage() {
 
   const acceptResponse = async (response) => {
     try {
-      const res = await authFetch(`/api/bookings/${response.Id}/accept`, {
-        method: 'PUT',
+      const res = await authFetch(`/api/bookings/${response.BookingId || response.Id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'confirmed' }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to accept');
@@ -309,8 +313,9 @@ export default function MyToursAndBookingsPage() {
   const rejectResponse = async (response) => {
     if (!window.confirm('Reject this booking?')) return;
     try {
-      const res = await authFetch(`/api/bookings/${response.Id}/reject`, {
-        method: 'PUT',
+      const res = await authFetch(`/api/bookings/${response.BookingId || response.Id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled' }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to reject');
@@ -318,6 +323,23 @@ export default function MyToursAndBookingsPage() {
         r.Id === response.Id ? { ...r, Status: 'cancelled' } : r
       ));
       addToast('Booking rejected.', 'info');
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
+  const completeResponse = async (response) => {
+    try {
+      const res = await authFetch(`/api/bookings/${response.BookingId || response.Id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'completed' }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message || 'Could not complete booking');
+      setResponses(prev => prev.map(r =>
+        r.Id === response.Id ? { ...r, Status: 'completed' } : r
+      ));
+      addToast('Tour marked as completed.', 'success');
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -486,6 +508,12 @@ export default function MyToursAndBookingsPage() {
                       Reject
                     </button>
                   </div>
+                )}
+                {r.Status === 'confirmed' && (
+                  <button onClick={() => completeResponse(r)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/25 transition-colors">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Mark completed
+                  </button>
                 )}
               </div>
             ))}

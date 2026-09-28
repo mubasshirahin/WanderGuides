@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Search, MapPin, Star, X, Filter, Loader2, Eye, Clock,
-  CalendarDays, CheckCircle, AlertCircle, Gavel, DollarSign, Coins, Mail, Phone
+  CalendarDays, CheckCircle, AlertCircle, Gavel, DollarSign, Coins, Mail, Phone, MessageCircle
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
+import { startConversation } from '../lib/chat.js';
 
 const currency = (n) =>
   n == null || Number.isNaN(Number(n)) ? '—' : `\u09F3${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -62,6 +64,7 @@ function Avatar({ src, name, className = 'h-12 w-12' }) {
 }
 
 export default function ExplorePage({ role }) {
+  const navigate = useNavigate();
   const [guides, setGuides] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -150,6 +153,17 @@ export default function ExplorePage({ role }) {
     if (!requireTourist()) return flash('Sign in as a tourist to place a bid', 'error');
     setBidGuide(guide);
     setBidForm((f) => ({ ...f, guideId: guide.UserID || guide.Id }));
+  };
+
+  const messageGuide = async (guide) => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to message a guide.', 'error');
+    if (!guide?.UserID) return flash('This guide has not linked a messaging account yet.', 'error');
+    try {
+      const conversation = await startConversation(guide.UserID);
+      navigate(`/messages?conversation=${conversation.conversationId}`);
+    } catch (e) {
+      flash(e.message, 'error');
+    }
   };
 
   const submitBook = async (e) => {
@@ -466,7 +480,14 @@ export default function ExplorePage({ role }) {
             <p className="text-sm text-slate-500">No reviews yet.</p>
           )}
 
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <button
+              onClick={() => messageGuide(selected)}
+              disabled={!selected.UserID}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <MessageCircle className="h-4 w-4" /> Message
+            </button>
             <button
               onClick={() => openBook({ Id: selected.Id, UserID: selected.UserID, FullName: selected.FullName })}
               className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-500"

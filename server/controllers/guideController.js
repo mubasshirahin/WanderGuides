@@ -6,6 +6,12 @@ function escapeLike(value) {
   return String(value).replace(/[%_[\]]/g, (ch) => `[${ch}]`);
 }
 
+function positiveInteger(value, fallback, maximum) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, maximum);
+}
+
 /**
  * GET /api/guides/explore
  * Public list of active guides with search, filters, and pagination.
@@ -19,10 +25,12 @@ export async function exploreGuides(req, res) {
     maxPrice,
     minRating,
     sort = 'rating',
-    page = 1,
-    pageSize = 12,
+    page: requestedPage = 1,
+    pageSize: requestedPageSize = 12,
   } = req.query;
 
+  const page = positiveInteger(requestedPage, 1, 1000000);
+  const pageSize = positiveInteger(requestedPageSize, 12, 100);
   const offset = (page - 1) * pageSize;
 
   const orderBy = {
@@ -416,10 +424,12 @@ export async function browseTours(req, res) {
     minPrice,
     maxPrice,
     difficulty,
-    page = 1,
-    pageSize = 12,
+    page: requestedPage = 1,
+    pageSize: requestedPageSize = 12,
   } = req.query;
 
+  const page = positiveInteger(requestedPage, 1, 1000000);
+  const pageSize = positiveInteger(requestedPageSize, 12, 100);
   const offset = (page - 1) * pageSize;
 
   const where = [
@@ -445,7 +455,8 @@ export async function browseTours(req, res) {
       gt.Id, gt.Title, gt.Description, gt.Location, gt.Price,
       gt.DurationHours, gt.MaxGroupSize, gt.Category, gt.Difficulty,
       gt.MeetingPoint, gt.Included, gt.Highlights, gt.Languages, gt.CreatedAt,
-      g.Id AS GuideProfileId, g.FullName AS GuideName, g.City AS GuideCity,
+      g.Id AS GuideProfileId, g.UserID AS GuideUserId,
+      g.FullName AS GuideName, g.City AS GuideCity,
       g.Rating AS GuideRating, g.TotalReviews AS GuideReviews, g.HourlyRate, g.DailyRate,
       u.AvatarUrl AS GuideAvatar
     ${base}

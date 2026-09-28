@@ -112,49 +112,53 @@ export async function getUserReviews(req, res) {
   const userRows = await query('SELECT Role FROM Users WHERE Id = @id', { id: userId });
   if (!userRows.length) throw new AppError('User not found', 404);
 
+  const isTourist = String(userRows[0].Role).toLowerCase() === 'tourist';
+  const source = isTourist ? 'GuideReviewsOfTourists' : 'Reviews';
+  const reviewerIdColumn = isTourist ? 'GuideID' : 'TouristUserId';
+  const targetIdColumn = isTourist ? 'TouristID' : 'GuideId';
+  const idColumn = isTourist ? 'ReviewID' : 'Id';
+  const bookingIdColumn = 'BookingID';
+
   const reviews = await query(
-    `SELECT r.Id, r.BookingId, r.Rating, r.Comment, r.CreatedAt,
+    `SELECT r.${idColumn} AS Id, r.${bookingIdColumn} AS BookingId,
+            r.Rating, r.Comment, r.CreatedAt,
             reviewer.FullName AS ReviewerName, reviewer.AvatarUrl AS ReviewerAvatar,
-            r.ReviewerRole
-     FROM Reviews r
-     INNER JOIN Users reviewer ON reviewer.Id = r.ReviewerId
-     WHERE r.RevieweeId = @userId
+            '${isTourist ? 'guide' : 'tourist'}' AS ReviewerRole
+     FROM ${source} r
+     INNER JOIN Users reviewer ON reviewer.Id = r.${reviewerIdColumn}
+     WHERE r.${targetIdColumn} = @userId
      ORDER BY r.CreatedAt DESC
      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`,
     { userId, offset, limit }
   );
 
-  const countRows = await query(
-    'SELECT COUNT(*) AS total FROM Reviews WHERE RevieweeId = @userId',
-    { userId }
-  );
-  const total = Number(countRows[0]?.total) || 0;
-
-  const avgRows = await query(
-    `SELECT
-       ISNULL(AVG(CAST(Rating AS DECIMAL(3,2))), 0) AS avgRating,
+  const statsRows = await query(
+    `SELECT COUNT(*) AS total,
+       ISNULL(AVG(CAST(Rating AS DECIMAL(10,2))), 0) AS avgRating,
        ISNULL(SUM(CASE WHEN Rating = 5 THEN 1 ELSE 0 END), 0) AS star5,
        ISNULL(SUM(CASE WHEN Rating = 4 THEN 1 ELSE 0 END), 0) AS star4,
        ISNULL(SUM(CASE WHEN Rating = 3 THEN 1 ELSE 0 END), 0) AS star3,
        ISNULL(SUM(CASE WHEN Rating = 2 THEN 1 ELSE 0 END), 0) AS star2,
        ISNULL(SUM(CASE WHEN Rating = 1 THEN 1 ELSE 0 END), 0) AS star1
-     FROM Reviews WHERE RevieweeId = @userId`,
+     FROM ${source} WHERE ${targetIdColumn} = @userId`,
     { userId }
   );
+  const stats = statsRows[0] || {};
+  const total = Number(stats.total) || 0;
 
   res.json({
     ok: true,
     reviews,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     avgRating: {
-      average: Number(avgRows[0]?.avgRating) || 0,
+      average: Number(stats.avgRating) || 0,
       total,
       breakdown: {
-        5: Number(avgRows[0]?.star5) || 0,
-        4: Number(avgRows[0]?.star4) || 0,
-        3: Number(avgRows[0]?.star3) || 0,
-        2: Number(avgRows[0]?.star2) || 0,
-        1: Number(avgRows[0]?.star1) || 0,
+        5: Number(stats.star5) || 0,
+        4: Number(stats.star4) || 0,
+        3: Number(stats.star3) || 0,
+        2: Number(stats.star2) || 0,
+        1: Number(stats.star1) || 0,
       },
     },
   });
@@ -168,26 +172,23 @@ export async function getPendingReviews(req, res) {
   const userId = req.user?.id;
   if (!userId) throw new AppError('Unauthorized', 401);
 
+  if (String(req.user?.role).toLowerCase() !== 'tourist') {
+    return res.json({ ok: true, bookings: [] });
+  }
+
   const bookings = await query(
     `SELECT b.Id AS BookingId, b.StartDate, b.EndDate, b.TotalAmount,
-            u.FullName AS OtherName, u.AvatarUrl AS OtherAvatar, u.Role AS OtherRole,
+            guide.FullName AS OtherName, guide.AvatarUrl AS OtherAvatar, guide.Role AS OtherRole,
             g.City AS GuideCity, g.Specialties AS GuideSpecialties,
-            CASE
-              WHEN b.TouristUserId = @userId THEN 'tourist'
-              ELSE 'guide'
-            END AS MyRole,
-            CASE
-              WHEN b.TouristUserId = @userId THEN b.GuideId
-              ELSE b.TouristUserId
-            END AS RevieweeId
+            'tourist' AS MyRole, b.GuideId AS RevieweeId
      FROM Bookings b
-     INNER JOIN Users u ON u.Id = CASE WHEN b.TouristUserId = @userId THEN b.GuideId ELSE b.TouristUserId END
-     LEFT JOIN Guides g ON g.Email = u.Email
+     INNER JOIN Users guide ON guide.Id = b.GuideId
+     LEFT JOIN Guides g ON g.UserID = guide.Id
      WHERE b.Status = 'completed'
-       AND (b.TouristUserId = @userId OR b.GuideId = @userId)
+       AND b.TouristUserId = @userId
        AND NOT EXISTS (
          SELECT 1 FROM Reviews r
-         WHERE r.BookingId = b.Id AND r.ReviewerId = @userId
+         WHERE r.BookingId = b.Id
        )
      ORDER BY b.EndDate DESC`,
     { userId }
@@ -206,11 +207,11 @@ export async function getMyGivenReviews(req, res) {
 
   const reviews = await query(
     `SELECT r.Id, r.BookingId, r.Rating, r.Comment, r.CreatedAt,
-            reviewee.FullName AS RevieweeName, reviewee.AvatarUrl AS RevieweeAvatar,
-            r.ReviewerRole
+            guide.FullName AS RevieweeName, guide.AvatarUrl AS RevieweeAvatar,
+            'tourist' AS ReviewerRole
      FROM Reviews r
-     INNER JOIN Users reviewee ON reviewee.Id = r.RevieweeId
-     WHERE r.ReviewerId = @userId
+     INNER JOIN Users guide ON guide.Id = r.GuideId
+     WHERE r.TouristUserId = @userId
      ORDER BY r.CreatedAt DESC`,
     { userId }
   );
