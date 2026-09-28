@@ -61,7 +61,7 @@ const statements = [
      GuideUserId INT NOT NULL,
      CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
      CONSTRAINT FK_TouristFavoriteGuides_Tourist_UI FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE,
-     CONSTRAINT FK_TouristFavoriteGuides_Guide_UI FOREIGN KEY (GuideUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+     CONSTRAINT FK_TouristFavoriteGuides_Guide_UI FOREIGN KEY (GuideUserId) REFERENCES Users(Id),
      CONSTRAINT UQ_TouristFavoriteGuides_Pair_UI UNIQUE (TouristUserId, GuideUserId)
    )`,
   `IF OBJECT_ID('TouristNotifications', 'U') IS NULL
@@ -100,12 +100,18 @@ async function run() {
   let pool;
   try {
     pool = await sql.connect(config);
-    for (const statement of statements) {
-      await pool.request().query(statement);
+    for (const [index, statement] of statements.entries()) {
+      try {
+        await pool.request().query(statement);
+      } catch (error) {
+        const details = error.precedingErrors?.map((item) => item.message).filter(Boolean).join(' | ');
+        console.error(`[migration] Statement ${index + 1}/${statements.length} failed:`, details || error.originalError?.info?.message || error.message);
+        throw error;
+      }
     }
     console.log('[migration] Tourist profiles, tour packages, guide directory, favorites, and payment status schema are up to date.');
   } catch (error) {
-    console.error('[migration] Failed:', error.message);
+    console.error('[migration] Failed:', error.originalError?.info?.message || error.message);
     process.exitCode = 1;
   } finally {
     if (pool) await pool.close();
