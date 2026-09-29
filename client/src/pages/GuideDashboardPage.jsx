@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser } from '../lib/demoAuth.js';
+import { Link } from 'react-router-dom';
 
 const statusStyles = {
   pending: 'bg-amber-500/15 text-amber-400',
@@ -47,7 +48,7 @@ export default function GuideDashboardPage() {
       const res = await authFetch('/api/guide/dashboard');
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to load dashboard');
-      setDashboard(data);
+      setDashboard(data.dashboard || data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -107,34 +108,56 @@ export default function GuideDashboardPage() {
             <MetricCard
               icon={DollarSign}
               label="Total Earnings"
-              value={`৳${Number(dashboard.totalEarnings || 0).toFixed(2)}`}
+              value={`৳${Number(dashboard.stats?.totalEarnings ?? dashboard.totalEarnings ?? 0).toFixed(2)}`}
               color="text-emerald-400"
             />
             <MetricCard
               icon={Map}
               label="Active Tours"
-              value={dashboard.activeTours || 0}
+              value={dashboard.stats?.activeTours ?? dashboard.activeTours ?? 0}
               color="text-sky-400"
             />
             <MetricCard
               icon={Clock}
               label="Pending Bookings"
-              value={dashboard.pendingBookings || 0}
+              value={dashboard.stats?.pendingBookings ?? dashboard.pendingBookings ?? 0}
               color="text-amber-400"
             />
             <MetricCard
               icon={CheckCircle}
               label="Completed Tours"
-              value={dashboard.completedTours || 0}
+              value={dashboard.stats?.completedBookings ?? dashboard.completedTours ?? 0}
               color="text-brand-400"
             />
             <MetricCard
               icon={Star}
               label="Current Rating"
-              value={dashboard.currentRating != null ? Number(dashboard.currentRating).toFixed(1) : '—'}
+              value={(dashboard.stats?.currentRating ?? dashboard.currentRating) != null ? Number(dashboard.stats?.currentRating ?? dashboard.currentRating).toFixed(1) : '—'}
               color="text-amber-400"
             />
           </div>
+
+          <div className="mb-8 grid gap-4 sm:grid-cols-2">
+            <MetricCard icon={DollarSign} label="Completed bookings marked paid" value={`৳${Number(dashboard.stats?.paidEarnings || 0).toFixed(2)}`} color="text-emerald-400" />
+            <MetricCard icon={Clock} label="Completed bookings marked unpaid" value={`৳${Number(dashboard.stats?.unpaidEarnings || 0).toFixed(2)}`} color="text-amber-400" />
+          </div>
+
+          {((dashboard.stats?.pendingBookings || dashboard.recentBookings?.some((b) => b.Status === 'pending')) || dashboard.pendingRequests?.length > 0) && (
+            <div className="mb-8 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-white">You have items that may need attention</p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {dashboard.stats?.pendingBookings ?? dashboard.recentBookings?.filter((b) => b.Status === 'pending').length ?? 0} pending booking request(s) · {dashboard.pendingRequests?.length || 0} open custom request(s)
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Link to="/bookings" className="rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15">Review bookings</Link>
+                  <Link to="/custom-requests" className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-500">Browse requests</Link>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Content Grid: Recent Bookings + Pending Requests */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -283,6 +283,7 @@ CREATE TABLE GuideTours (
     Included      NVARCHAR(MAX) NULL,
     Highlights    NVARCHAR(MAX) NULL,
     Languages     NVARCHAR(255) NULL,
+    ViewCount     INT NOT NULL DEFAULT 0,
     IsActive      BIT NOT NULL DEFAULT 1,
     CreatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
     UpdatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),

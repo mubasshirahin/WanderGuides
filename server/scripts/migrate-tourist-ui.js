@@ -22,6 +22,7 @@ const config = {
 const statements = [
   `IF COL_LENGTH('Reviews', 'GuideResponse') IS NULL ALTER TABLE Reviews ADD GuideResponse NVARCHAR(1000) NULL`,
   `IF COL_LENGTH('Reviews', 'GuideResponseAt') IS NULL ALTER TABLE Reviews ADD GuideResponseAt DATETIME2 NULL`,
+  `IF COL_LENGTH('GuideTours', 'ViewCount') IS NULL ALTER TABLE GuideTours ADD ViewCount INT NOT NULL CONSTRAINT DF_GuideTours_ViewCount_UI DEFAULT 0`,
 
   // Keep the guide directory and guide account connected on existing databases.
   `IF COL_LENGTH('Guides', 'UserID') IS NULL ALTER TABLE Guides ADD UserID INT NULL`,
