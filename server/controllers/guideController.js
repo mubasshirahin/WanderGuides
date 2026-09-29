@@ -115,7 +115,7 @@ export async function getGuideEx(req, res) {
     // Live DB: Reviews uses ReviewerId/RevieweeId/ReviewerRole.
     reviewsSql = `
       SELECT
-        r.Id, r.Rating, r.Comment, r.CreatedAt,
+        r.Id, r.Rating, r.Comment, r.GuideResponse, r.GuideResponseAt, r.CreatedAt,
         tourist.FullName AS TouristName, tourist.AvatarUrl AS TouristAvatarUrl
       FROM Reviews r
       INNER JOIN Users tourist ON tourist.Id = r.ReviewerId
@@ -126,7 +126,7 @@ export async function getGuideEx(req, res) {
     // schema.sql design: Reviews uses TouristUserId/GuideId.
     reviewsSql = `
       SELECT
-        r.Id, r.Rating, r.Comment, r.CreatedAt,
+        r.Id, r.Rating, r.Comment, r.GuideResponse, r.GuideResponseAt, r.CreatedAt,
         tourist.FullName AS TouristName, tourist.AvatarUrl AS TouristAvatarUrl
       FROM Reviews r
       INNER JOIN Users tourist ON tourist.Id = r.TouristUserId

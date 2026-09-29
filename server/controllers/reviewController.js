@@ -122,6 +122,8 @@ export async function getUserReviews(req, res) {
   const reviews = await query(
     `SELECT r.${idColumn} AS Id, r.${bookingIdColumn} AS BookingId,
             r.Rating, r.Comment, r.CreatedAt,
+            ${isTourist ? 'CAST(NULL AS NVARCHAR(1000))' : 'r.GuideResponse'} AS GuideResponse,
+            ${isTourist ? 'CAST(NULL AS DATETIME2)' : 'r.GuideResponseAt'} AS GuideResponseAt,
             reviewer.FullName AS ReviewerName, reviewer.AvatarUrl AS ReviewerAvatar,
             '${isTourist ? 'guide' : 'tourist'}' AS ReviewerRole
      FROM ${source} r
@@ -162,6 +164,26 @@ export async function getUserReviews(req, res) {
       },
     },
   });
+}
+
+/** PUT /api/reviews/:reviewId/response - let the guide respond to their review. */
+export async function respondToReview(req, res) {
+  const guideId = Number(req.user?.id);
+  const reviewId = Number(req.params.reviewId);
+  const response = String(req.body?.response || '').trim();
+  if (!guideId) throw new AppError('Unauthorized', 401);
+  if (!Number.isInteger(reviewId) || reviewId <= 0) throw new AppError('Invalid review ID', 400);
+  if (!response || response.length > 1000) throw new AppError('Response must be between 1 and 1000 characters', 400);
+
+  const rows = await query(
+    `UPDATE Reviews
+     SET GuideResponse = @response, GuideResponseAt = SYSUTCDATETIME()
+     OUTPUT INSERTED.Id, INSERTED.GuideResponse, INSERTED.GuideResponseAt
+     WHERE Id = @reviewId AND GuideId = @guideId`,
+    { reviewId, guideId, response }
+  );
+  if (!rows.length) throw new AppError('Review not found for this guide', 404);
+  res.json({ ok: true, review: rows[0] });
 }
 
 /**
@@ -235,7 +257,7 @@ export function createGetGuideReviews(queryFn = query) {
     }
 
     const reviews = await queryFn(
-      `SELECT r.Id, r.Rating, r.Comment, r.CreatedAt,
+      `SELECT r.Id, r.Rating, r.Comment, r.GuideResponse, r.GuideResponseAt, r.CreatedAt,
               tourist.FullName AS TouristName, tourist.AvatarUrl AS TouristAvatarUrl
        FROM Reviews r
        INNER JOIN Users tourist ON tourist.Id = r.TouristUserId
