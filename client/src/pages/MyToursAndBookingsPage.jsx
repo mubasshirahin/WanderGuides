@@ -212,7 +212,7 @@ function CreateTourForm({ onCreated, onClose, tour = null }) {
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-1">Price (৳)</label>
           <div className="relative">
-            <DollarSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500">৳</span>
             <input name="price" type="number" min={0} step="0.01" value={form.price} onChange={handleChange} required
               placeholder="150"
               className="w-full rounded-xl border border-white/10 bg-white/[0.06] pl-10 pr-3 py-2.5 text-sm text-white outline-none transition-all placeholder:text-slate-500 focus:border-brand-400 focus:bg-white/[0.1] focus:ring-4 focus:ring-brand-500/15" />
