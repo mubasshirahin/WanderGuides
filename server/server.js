@@ -25,10 +25,39 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
-app.use(express.json());
+const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+app.use(cors({ origin: allowedOrigins }));
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+app.use(express.json({ limit: '1mb' }));
 
-// Placeholder API routes
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || /replace-with|change-me/i.test(process.env.JWT_SECRET)) {
+    throw new Error('Production requires a strong JWT_SECRET of at least 32 characters.');
+  }
+  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 12) {
+    throw new Error('Production requires ADMIN_EMAIL and an ADMIN_PASSWORD of at least 12 characters.');
+  }
+  if (!process.env.CLIENT_ORIGIN) {
+    throw new Error('Production requires CLIENT_ORIGIN with the deployed frontend origin.');
+  }
+  const productionOrigins = process.env.CLIENT_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+  if (productionOrigins.some((origin) => !origin.startsWith('https://'))) {
+    throw new Error('Production CLIENT_ORIGIN values must use HTTPS.');
+  }
+  if (!process.env.DB_SERVER || !process.env.DB_NAME || (process.env.DB_USE_WINDOWS_AUTH !== 'true' && (!process.env.DB_USER || !process.env.DB_PASSWORD))) {
+    throw new Error('Production requires explicit SQL Server connection settings.');
+  }
+}
+
+// API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/guides', guideRoutes);
