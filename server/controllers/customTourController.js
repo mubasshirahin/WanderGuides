@@ -238,6 +238,11 @@ export async function createBid(req, res) {
 
 /**
  * PUT /api/custom-tours/bids/:bidId/accept
+ * Course topics:
+ *  PROCEDURE + TRANSACTION: db/procedures.sql -> sp_AcceptBid
+ *    (Request fulfilled + Bid accepted + baki rejected + Booking INSERT 1 TRAN e).
+ *    Node theke chaile: query('EXEC dbo.sp_AcceptBid @bidId, @touristId', { bidId, touristId })
+ *  TRANSACTION demo raw version: db/transaction_demo.sql (DEMO 1).
  * Tourist accepts a bid:
  *  - Updates TourBids.Status to 'accepted'
  *  - Creates a new record in Bookings table with status 'confirmed'
