@@ -17,8 +17,10 @@ const roleLinks = {
   guide: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/my-tours', label: 'My Tours', icon: Map },
+    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
     { to: '/custom-requests', label: 'Custom Requests', icon: ClipboardList },
     { to: '/messages', label: 'Messages', icon: MessageSquare },
+    { to: '/reviews', label: 'Reviews', icon: Star },
     { to: '/availability', label: 'Profile', icon: UserCircle },
   ],
   admin: [

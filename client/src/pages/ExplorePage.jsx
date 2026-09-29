@@ -509,6 +509,7 @@ export default function ExplorePage({ role }) {
                     <Stars rating={r.Rating} />
                   </div>
                   <p className="mt-2 text-sm text-slate-300">{r.Comment}</p>
+                  {r.GuideResponse && <div className="mt-3 rounded-lg border-l-2 border-brand-400/60 bg-brand-500/[0.06] px-3 py-2"><p className="text-xs font-semibold text-brand-300">Guide response</p><p className="mt-1 whitespace-pre-wrap text-sm text-slate-300">{r.GuideResponse}</p></div>}
                   <p className="mt-1 text-xs text-slate-500">{new Date(r.CreatedAt).toLocaleDateString()}</p>
                 </div>
               ))}

@@ -128,6 +128,11 @@ export default function BrowseToursPage({ role }) {
     setBookingTour(tour);
   };
 
+  const handleViewTour = (tour) => {
+    setSelected(tour);
+    fetch(`/api/guides/tours/${tour.Id}/view`, { method: 'POST' }).catch(() => {});
+  };
+
   const bookTour = async (event) => {
     event.preventDefault();
     if (!bookingTour || !bookingDate || availability !== true) return;
@@ -321,7 +326,7 @@ export default function BrowseToursPage({ role }) {
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {tours.map((t) => (
-                  <TourCard key={t.Id} tour={t} onView={setSelected} onFavorite={toggleFavorite} isFavorite={favorites.includes(Number(t.Id))} />
+                  <TourCard key={t.Id} tour={t} onView={handleViewTour} onFavorite={toggleFavorite} isFavorite={favorites.includes(Number(t.Id))} />
                 ))}
               </div>
 

@@ -61,8 +61,8 @@ export async function getMyTours(req, res) {
   const rows = await query(
     `SELECT
        gt.Id, gt.Title, gt.Description, gt.Location, gt.Price,
-       gt.DurationHours, gt.MaxGroupSize, gt.IsActive, gt.CreatedAt,
-       (SELECT COUNT(*) FROM Bookings b WHERE b.GuideId = @guideId AND b.Notes LIKE '%' + gt.Title + '%') AS bookingCount,
+       gt.DurationHours, gt.MaxGroupSize, gt.IsActive, gt.ViewCount AS viewCount, gt.CreatedAt,
+       (SELECT COUNT(*) FROM Bookings b WHERE b.GuideId = @guideId AND (b.TourId = gt.Id OR (b.TourId IS NULL AND b.Notes LIKE '%' + gt.Title + '%'))) AS bookingCount,
        (SELECT COUNT(*) FROM TourBids tb WHERE tb.GuideID = @guideId AND tb.RequestID IN (
          SELECT ctr.RequestID FROM CustomTourRequests ctr WHERE ctr.Title LIKE '%' + gt.Title + '%'
        )) AS bidCount
@@ -73,6 +73,20 @@ export async function getMyTours(req, res) {
   );
 
   res.json({ ok: true, tours: rows });
+}
+
+/** POST /api/guide/tours/:tourId/view - record a public tour detail view. */
+export async function recordTourView(req, res) {
+  const tourId = Number(req.params.tourId);
+  if (!Number.isInteger(tourId) || tourId <= 0) throw new AppError('Invalid tour ID', 400);
+  const rows = await query(
+    `UPDATE GuideTours SET ViewCount = ViewCount + 1
+     OUTPUT INSERTED.Id, INSERTED.ViewCount
+     WHERE Id = @tourId AND IsActive = 1`,
+    { tourId }
+  );
+  if (!rows.length) throw new AppError('Tour not found', 404);
+  res.json({ ok: true, tour: rows[0] });
 }
 
 /**
@@ -112,7 +126,7 @@ export async function getTourResponses(req, res) {
   // Get bids for custom tours matching this guide
   const bids = await query(
     `SELECT
-       tb.BidID, tb.RequestID, tb.GuideID, tb.OfferedPrice, tb.Message,
+       tb.BidID, tb.RequestID, tb.GuideID, tb.OfferedPrice, tb.ProposalMessage AS Message,
        tb.Status AS BidStatus, tb.CreatedAt AS BidCreatedAt,
        ctr.Title AS RequestTitle, ctr.Destination, ctr.Budget,
        ctr.StartDate AS RequestStartDate, ctr.EndDate AS RequestEndDate,
@@ -239,8 +253,8 @@ export async function submitBid(req, res) {
     // Update existing bid
     const rows = await query(
       `UPDATE TourBids
-       SET OfferedPrice = @offeredPrice, Message = @message, Status = 'pending', CreatedAt = SYSUTCDATETIME()
-       OUTPUT INSERTED.BidID, INSERTED.RequestID, INSERTED.OfferedPrice, INSERTED.Message, INSERTED.Status
+       SET OfferedPrice = @offeredPrice, ProposalMessage = @message, Status = 'pending', CreatedAt = SYSUTCDATETIME()
+       OUTPUT INSERTED.BidID, INSERTED.RequestID, INSERTED.OfferedPrice, INSERTED.ProposalMessage AS Message, INSERTED.Status
        WHERE RequestID = @requestId AND GuideID = @guideId`,
       { requestId, guideId, offeredPrice: Number(offeredPrice), message: message || null }
     );
@@ -249,8 +263,8 @@ export async function submitBid(req, res) {
 
   // Create new bid
   const rows = await query(
-    `INSERT INTO TourBids (RequestID, GuideID, OfferedPrice, Message, Status)
-     OUTPUT INSERTED.BidID, INSERTED.RequestID, INSERTED.OfferedPrice, INSERTED.Message, INSERTED.Status, INSERTED.CreatedAt
+    `INSERT INTO TourBids (RequestID, GuideID, OfferedPrice, ProposalMessage, Status)
+     OUTPUT INSERTED.BidID, INSERTED.RequestID, INSERTED.OfferedPrice, INSERTED.ProposalMessage AS Message, INSERTED.Status, INSERTED.CreatedAt
      VALUES (@requestId, @guideId, @offeredPrice, @message, 'pending')`,
     { requestId, guideId, offeredPrice: Number(offeredPrice), message: message || null }
   );
@@ -270,9 +284,11 @@ export async function getGuideDashboard(req, res) {
   const statsRows = await query(
     `SELECT
        (SELECT COUNT(*) FROM GuideTours WHERE GuideId = @guideId AND IsActive = 1) AS activeTours,
-       (SELECT COUNT(*) FROM Bookings WHERE GuideId = @guideId AND Status IN ('pending','confirmed')) AS pendingBookings,
+       (SELECT COUNT(*) FROM Bookings WHERE GuideId = @guideId AND Status = 'pending') AS pendingBookings,
        (SELECT COUNT(*) FROM Bookings WHERE GuideId = @guideId AND Status = 'completed') AS completedBookings,
        (SELECT ISNULL(SUM(TotalAmount), 0) FROM Bookings WHERE GuideId = @guideId AND Status = 'completed') AS totalEarnings,
+       (SELECT ISNULL(SUM(TotalAmount), 0) FROM Bookings WHERE GuideId = @guideId AND Status = 'completed' AND PaymentStatus = 'paid') AS paidEarnings,
+       (SELECT ISNULL(SUM(TotalAmount), 0) FROM Bookings WHERE GuideId = @guideId AND Status = 'completed' AND PaymentStatus <> 'paid') AS unpaidEarnings,
        (SELECT ISNULL(Rating, 0) FROM Guides WHERE Email = (SELECT Email FROM Users WHERE Id = @guideId)) AS currentRating`,
     { guideId }
   );

@@ -67,6 +67,8 @@ CREATE TABLE Reviews (
     GuideId      INT NOT NULL,
     Rating       TINYINT NOT NULL CHECK (Rating >= 1 AND Rating <= 5),
     Comment      NVARCHAR(MAX) NULL,
+    GuideResponse NVARCHAR(1000) NULL,
+    GuideResponseAt DATETIME2 NULL,
     CreatedAt    DATETIME2 DEFAULT SYSUTCDATETIME(),
 
     CONSTRAINT FK_Reviews_Booking FOREIGN KEY (BookingId) REFERENCES Bookings(Id),
@@ -281,6 +283,7 @@ CREATE TABLE GuideTours (
     Included      NVARCHAR(MAX) NULL,
     Highlights    NVARCHAR(MAX) NULL,
     Languages     NVARCHAR(255) NULL,
+    ViewCount     INT NOT NULL DEFAULT 0,
     IsActive      BIT NOT NULL DEFAULT 1,
     CreatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
     UpdatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
