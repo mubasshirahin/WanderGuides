@@ -3,23 +3,15 @@ import AppError from '../utils/AppError.js';
 
 /**
  * GET /api/analytics/guide-booking-summary
- * RIGHT JOIN example: Shows ALL guides including those with no bookings.
- * Useful to find guides who have never been booked.
+ * Course topic VIEW: db/views.sql -> vw_GuideEarnings use kore.
+ * (Age RIGHT JOIN + GROUP BY inline chilo.)
  */
 export async function getGuideBookingSummary(req, res) {
   const rows = await query(
-    `SELECT
-       g.Id AS GuideId,
-       g.FullName AS GuideName,
-       g.City,
-       g.Rating,
-       COUNT(b.Id) AS totalBookings,
-       ISNULL(SUM(b.TotalAmount), 0) AS totalEarnings
-     FROM Bookings b
-     RIGHT JOIN Guides g ON g.Id = b.GuideId
-     WHERE g.IsActive = 1
-     GROUP BY g.Id, g.FullName, g.City, g.Rating
-     ORDER BY totalBookings DESC`,
+    `SELECT GuideId, GuideName, City, Rating, TotalBookings,
+            TotalEarnings AS totalEarnings
+      FROM dbo.vw_GuideEarnings
+      ORDER BY TotalBookings DESC`,
     {}
   );
 
@@ -81,21 +73,15 @@ export async function getCitySpecialtyMatrix(req, res) {
 
 /**
  * GET /api/analytics/monthly-revenue
- * Additional aggregate example: Monthly revenue with MIN/MAX/AVG per month.
+ * Course topic VIEW: db/views.sql -> vw_MonthlyRevenue use kore.
  */
 export async function getMonthlyRevenue(req, res) {
   const rows = await query(
-    `SELECT
-       FORMAT(b.CreatedAt, 'yyyy-MM') AS month,
-       COUNT(*) AS totalBookings,
-       SUM(b.TotalAmount) AS totalRevenue,
-       MIN(b.TotalAmount) AS minBookingAmount,
-       MAX(b.TotalAmount) AS maxBookingAmount,
-       AVG(b.TotalAmount) AS avgBookingAmount
-     FROM Bookings b
-     WHERE b.Status != 'cancelled'
-     GROUP BY FORMAT(b.CreatedAt, 'yyyy-MM')
-     ORDER BY month DESC`,
+    `SELECT [Month] AS month, TotalBookings AS totalBookings,
+            TotalRevenue AS totalRevenue, MinBookingAmount AS minBookingAmount,
+            MaxBookingAmount AS maxBookingAmount, AvgBookingAmount AS avgBookingAmount
+      FROM dbo.vw_MonthlyRevenue
+      ORDER BY [Month] DESC`,
     {}
   );
 

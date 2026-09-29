@@ -9,6 +9,7 @@
     "dev": "nodemon server.js",
     "seed": "node scripts/seed.js",
     "migrate:ui": "node scripts/migrate-tourist-ui.js",
+    "migrate:db-objects": "node scripts/migrate-db-objects.js",
     "test": "node --test"
   },
   "dependencies": {

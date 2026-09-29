@@ -50,45 +50,23 @@ export const getAllBookings = async (req, res) => {
     }
   }
 
+  // Course topic VIEW: vari JOIN ta db/views.sql -> vw_BookingDetails e rakha.
+  // Controller ekhon sudhu view theke filter kore.
   const whereClause =
-    role === 'guide' ? 'b.GuideId = @userId'
-    : role === 'tourist' ? 'b.TouristUserId = @userId'
+    role === 'guide' ? 'GuideId = @userId'
+    : role === 'tourist' ? 'TouristUserId = @userId'
     : '1=1';
   const sql = `
     SELECT
-      b.Id,
-      b.TouristUserId,
-      b.GuideId,
-      b.TourId,
-      b.GroupSize,
-      b.StartDate,
-      b.EndDate,
-      b.Status,
-      b.TotalAmount,
-      b.PaymentStatus,
-      b.Notes,
-      b.CreatedAt,
-      DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) AS CancellationDeadline,
-      CASE WHEN SYSUTCDATETIME() < DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS CanCancel,
-      gt.Title AS TourTitle,
-      gt.Itinerary,
-      gt.MeetingPoint,
-      gt.Location AS TourLocation,
-      gt.ImageUrl AS TourImageUrl,
-      tourist.FullName AS TouristName,
-      tourist.Email AS TouristEmail,
-      guide.FullName AS GuideName,
-      guide.Email AS GuideEmail,
-      guide.Phone AS GuidePhone,
-      guide.AvatarUrl AS GuideAvatarUrl,
-      guide.Bio AS GuideBio
-    FROM Bookings b
-    INNER JOIN Users tourist ON tourist.Id = b.TouristUserId
-    INNER JOIN Users guide ON guide.Id = b.GuideId
-    LEFT JOIN GuideTours gt ON gt.Id = b.TourId
+      Id, TouristUserId, GuideId, TourId, GroupSize, StartDate, EndDate,
+      Status, TotalAmount, PaymentStatus, Notes, CreatedAt,
+      CancellationDeadline, CanCancel, TourTitle, Itinerary, MeetingPoint,
+      TourLocation, TourImageUrl, TouristName, TouristEmail,
+      GuideName, GuideEmail, GuidePhone, GuideAvatarUrl, GuideBio
+    FROM dbo.vw_BookingDetails
     WHERE ${whereClause}
-      AND (@status IS NULL OR b.Status = @status)
-    ORDER BY b.CreatedAt DESC, b.Id DESC
+      AND (@status IS NULL OR Status = @status)
+    ORDER BY CreatedAt DESC, Id DESC
   `;
 
   const bookings = await query(sql, {
