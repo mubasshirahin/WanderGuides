@@ -24,26 +24,39 @@ export default function GuidesPage({ role }) {
   const [cityFilter, setCityFilter] = useState('');
   const [cities, setCities] = useState([]);
 
-  const fetchGuides = async () => {
+  const fetchGuides = async (signal) => {
     setLoading(true);
+    setError(null);
     try {
-      const params = new URLSearchParams();
-      if (cityFilter) params.set('city', cityFilter);
-      const res = await fetch(`${API}?${params.toString()}`);
+      const res = await fetch(API, { signal });
       const data = await res.json();
-      if (!data.ok) throw new Error(data.message || 'Failed to load');
-      setGuides(data.guides);
+      if (!res.ok) throw new Error(data.message || 'Failed to load guides');
+
+      // The list endpoint returns { data, total, page, ... } while some older
+      // API responses use { ok, guides }. Accept both response formats.
+      const guideList = Array.isArray(data.data)
+        ? data.data
+        : Array.isArray(data.guides)
+          ? data.guides
+          : null;
+      if (!guideList) throw new Error(data.message || 'Unexpected response from the server');
+
+      setGuides(guideList);
       // collect unique cities
-      const unique = [...new Set(data.guides.map(g => g.City).filter(Boolean))].sort();
+      const unique = [...new Set(guideList.map(g => g.City).filter(Boolean))].sort();
       setCities(unique);
     } catch (e) {
-      setError(e.message);
+      if (e.name !== 'AbortError') setError(e.message || 'Failed to load guides');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
-  useEffect(() => { fetchGuides(); }, [cityFilter]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchGuides(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this guide?')) return;
@@ -57,9 +70,12 @@ export default function GuidesPage({ role }) {
     }
   };
 
-  const filtered = guides.filter(g =>
-    (g.FullName + ' ' + g.City + ' ' + (g.Specialties || '')).toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = guides.filter(g => {
+    const matchesSearch = `${g.FullName || ''} ${g.City || ''} ${g.Specialties || ''}`
+      .toLowerCase()
+      .includes(search.toLowerCase());
+    return matchesSearch && (!cityFilter || g.City === cityFilter);
+  });
 
   return (
     <div>
@@ -142,7 +158,7 @@ export default function GuidesPage({ role }) {
                       <MapPin className="h-3.5 w-3.5 text-brand-400" />
                       {g.City}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-white">৳ {Number(g.RatePerDay).toFixed(2)}</td>
+                    <td className="px-4 py-3 font-semibold text-white">৳ {Number(g.DailyRate ?? g.RatePerDay ?? 0).toFixed(2)}</td>
                     <td className="px-4 py-3 flex items-center gap-1 text-slate-300">
                       <Star className="h-3.5 w-3.5 fill-accent-400 text-accent-400" />
                       {Number(g.Rating || 0).toFixed(1)}
