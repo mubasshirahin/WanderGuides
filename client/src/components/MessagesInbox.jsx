@@ -27,6 +27,9 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [nextBeforeId, setNextBeforeId] = useState(null);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [text, setText] = useState('');
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -74,6 +77,8 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.message || 'Failed to load messages');
       setMessages(data.messages || []);
+      setHasOlderMessages(Boolean(data.hasMore));
+      setNextBeforeId(data.nextBeforeId || null);
     } catch (err) {
       setError(err.name === 'AbortError' ? 'Loading messages timed out. Check that the API and database are running, then retry.' : (err.message || 'Failed to load messages'));
     } finally {
@@ -82,12 +87,35 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
     }
   }, []);
 
+  const fetchOlderMessages = useCallback(async () => {
+    if (!activeConversationId || !nextBeforeId || loadingOlderMessages) return;
+    setLoadingOlderMessages(true);
+    try {
+      const params = new URLSearchParams({ before: String(nextBeforeId), limit: '50' });
+      const res = await authFetch(`/api/chat/messages/${activeConversationId}?${params}`);
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Failed to load older messages');
+      setMessages((current) => {
+        const existing = new Set(current.map((message) => message.messageId));
+        return [...(data.messages || []).filter((message) => !existing.has(message.messageId)), ...current];
+      });
+      setHasOlderMessages(Boolean(data.hasMore));
+      setNextBeforeId(data.nextBeforeId || null);
+    } catch (err) {
+      setError(err.message || 'Failed to load older messages');
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  }, [activeConversationId, nextBeforeId, loadingOlderMessages]);
+
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
   useEffect(() => {
     if (activeConversationId) {
+      setHasOlderMessages(false);
+      setNextBeforeId(null);
       fetchMessages(activeConversationId);
     } else {
       setMessages([]);
@@ -343,6 +371,11 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
+                  {hasOlderMessages && (
+                    <button type="button" onClick={fetchOlderMessages} disabled={loadingOlderMessages} className="self-center rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-50">
+                      {loadingOlderMessages ? 'Loading older messages…' : 'Load older messages'}
+                    </button>
+                  )}
                   {messages.map((msg) => (
                     <div
                       key={msg.messageId}
