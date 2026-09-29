@@ -9,7 +9,9 @@ CREATE TABLE Users (
     FullName    NVARCHAR(100) NOT NULL,
     Email       NVARCHAR(150) NOT NULL UNIQUE,
     PasswordHash NVARCHAR(255) NOT NULL,
-    Role        NVARCHAR(20) NOT NULL CHECK (Role IN ('tourist', 'guide')),
+    Role        NVARCHAR(20) NOT NULL CONSTRAINT CK_Users_Role CHECK (Role IN ('tourist', 'guide', 'admin')),
+    Provider    NVARCHAR(20) NOT NULL CONSTRAINT DF_Users_Provider DEFAULT 'local',
+    ProviderId  NVARCHAR(255) NULL,
     Phone       NVARCHAR(30) NULL,
     AvatarUrl   NVARCHAR(500) NULL,
     Bio         NVARCHAR(MAX) NULL,
@@ -23,6 +25,7 @@ CREATE INDEX IX_Users_Email ON Users(Email);
 
 -- Index on Role for filtering by account type
 CREATE INDEX IX_Users_Role ON Users(Role);
+CREATE UNIQUE INDEX UX_Users_ProviderId ON Users(Provider, ProviderId) WHERE ProviderId IS NOT NULL;
 
 -- =============================================
 -- Bookings Table Schema

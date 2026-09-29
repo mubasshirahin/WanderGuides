@@ -10,48 +10,26 @@
 -- 1) Review aslei guide rating auto-update.
 --    age reviewController.createReview e manual AVG + UPDATE chilo —
 --    ekhon DB nijei kore dey, Node code fail korleo rating thik thakbe.
---    NOTE: live DB (RevieweeId) + schema.sql (GuideId) — 2tatei chole.
+--    Uses the canonical Reviews columns from db/schema.sql.
 CREATE OR ALTER TRIGGER dbo.trg_Reviews_AfterInsert
 ON dbo.Reviews
 AFTER INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
-    IF EXISTS (SELECT 1 FROM sys.columns
-               WHERE object_id = OBJECT_ID('dbo.Reviews') AND name = 'RevieweeId')
-    BEGIN
-        UPDATE g
-        SET Rating = agg.AvgRating,
-            TotalReviews = agg.ReviewCount,
-            UpdatedAt = SYSUTCDATETIME()
-        FROM dbo.Guides g
-        INNER JOIN (
-            SELECT i.RevieweeId AS GuideKey,
-                   AVG(CAST(r.Rating AS DECIMAL(10,2))) AS AvgRating,
-                   COUNT(*) AS ReviewCount
-            FROM inserted i
-            INNER JOIN dbo.Reviews r
-                ON r.RevieweeId = i.RevieweeId AND r.ReviewerRole = 'tourist'
-            GROUP BY i.RevieweeId
-        ) agg ON agg.GuideKey = g.UserID;
-    END
-    ELSE
-    BEGIN
-        -- purano-schema branch dynamic SQL e (CREATE TRIGGER validation pass korar jonno)
-        EXEC(N'UPDATE g
-        SET Rating = agg.AvgRating,
-            TotalReviews = agg.ReviewCount,
-            UpdatedAt = SYSUTCDATETIME()
-        FROM dbo.Guides g
-        INNER JOIN (
-            SELECT i.GuideId AS GuideKey,
-                   AVG(CAST(r.Rating AS DECIMAL(10,2))) AS AvgRating,
-                   COUNT(*) AS ReviewCount
-            FROM inserted i
-            INNER JOIN dbo.Reviews r ON r.GuideId = i.GuideId
-            GROUP BY i.GuideId
-        ) agg ON agg.GuideKey = g.UserID');
-    END
+    UPDATE g
+    SET Rating = agg.AvgRating,
+        TotalReviews = agg.ReviewCount,
+        UpdatedAt = SYSUTCDATETIME()
+    FROM dbo.Guides g
+    INNER JOIN (
+        SELECT i.GuideId AS GuideKey,
+               AVG(CAST(r.Rating AS DECIMAL(10,2))) AS AvgRating,
+               COUNT(*) AS ReviewCount
+        FROM inserted i
+        INNER JOIN dbo.Reviews r ON r.GuideId = i.GuideId
+        GROUP BY i.GuideId
+    ) agg ON agg.GuideKey = g.UserID;
 END;
 GO
 
