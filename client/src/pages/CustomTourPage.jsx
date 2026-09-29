@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser, getToken } from '../lib/demoAuth.js';
+import { startConversation } from '../lib/chat.js';
 
 const API = '/api/custom-tours';
 
@@ -422,8 +423,13 @@ function TouristView({ addToast }) {
     }
   };
 
-  const handleMessageGuide = () => {
-    navigate('/messages');
+  const handleMessageGuide = async (bid) => {
+    try {
+      const conversation = await startConversation(bid.GuideID);
+      navigate(`/messages?conversation=${conversation.conversationId}`);
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
   };
 
   return (
@@ -571,7 +577,7 @@ function TouristView({ addToast }) {
                       <XCircle className="h-3.5 w-3.5" />
                       Decline
                     </button>
-                    <button onClick={handleMessageGuide}
+                    <button onClick={() => handleMessageGuide(bid)}
                       className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/[0.1] transition-colors">
                       <MessageCircle className="h-3.5 w-3.5" />
                       Message Guide

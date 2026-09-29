@@ -107,6 +107,30 @@ export function initSocket(server) {
           isMine: false,
         });
 
+        if (Number(convo.GuideID) === Number(senderId)) {
+          const noticeRows = await query(
+            `INSERT INTO TouristNotifications (TouristUserId, Type, Title, Body, LinkUrl)
+             OUTPUT INSERTED.Id, INSERTED.Type, INSERTED.Title, INSERTED.Body, INSERTED.LinkUrl,
+                    INSERTED.IsRead, INSERTED.CreatedAt
+             VALUES (@touristId, 'message', 'New message from your guide', @body, '/messages')`,
+            { touristId: receiverId, body: String(message.MessageText).trim().slice(0, 500) }
+          );
+          ioInstance.to(String(receiverId)).emit('notification:new', noticeRows[0]);
+        } else {
+          try {
+            const noticeRows = await query(
+              `INSERT INTO GuideNotifications (GuideUserId, Type, Title, Body, LinkUrl)
+               OUTPUT INSERTED.Id, INSERTED.Type, INSERTED.Title, INSERTED.Body, INSERTED.LinkUrl,
+                      INSERTED.IsRead, INSERTED.CreatedAt
+               VALUES (@guideId, 'message', 'New message from a tourist', @body, '/messages')`,
+              { guideId: receiverId, body: String(message.MessageText).trim().slice(0, 500) }
+            );
+            ioInstance.to(String(receiverId)).emit('guide_notification:new', noticeRows[0]);
+          } catch (notificationError) {
+            console.error('[socket] Could not create guide message notification:', notificationError.message);
+          }
+        }
+
         callback?.({ ok: true, message: normalizedMessage });
       } catch (err) {
         console.error('[socket] send_message error:', err);

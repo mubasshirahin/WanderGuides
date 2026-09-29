@@ -33,12 +33,15 @@ CREATE TABLE Bookings (
     Id            INT IDENTITY PRIMARY KEY,
     TouristUserId INT NOT NULL,
     GuideId       INT NOT NULL,
+    TourId        INT NULL,
+    GroupSize     INT NOT NULL DEFAULT 1,
     StartDate     DATE NOT NULL,
     EndDate       DATE NOT NULL,
     Status        NVARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (Status IN ('pending','confirmed','completed','cancelled')),
     BookingType   NVARCHAR(20) NOT NULL DEFAULT 'direct' CHECK (BookingType IN ('direct','bid_accepted')),
     TotalAmount   DECIMAL(10,2) NOT NULL,
     FinalPrice    DECIMAL(10,2) NULL,
+    PaymentStatus NVARCHAR(20) NOT NULL DEFAULT 'unpaid' CHECK (PaymentStatus IN ('unpaid','paid','refunded')),
     Notes         NVARCHAR(500) NULL,
     CreatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
 
@@ -64,6 +67,8 @@ CREATE TABLE Reviews (
     GuideId      INT NOT NULL,
     Rating       TINYINT NOT NULL CHECK (Rating >= 1 AND Rating <= 5),
     Comment      NVARCHAR(MAX) NULL,
+    GuideResponse NVARCHAR(1000) NULL,
+    GuideResponseAt DATETIME2 NULL,
     CreatedAt    DATETIME2 DEFAULT SYSUTCDATETIME(),
 
     CONSTRAINT FK_Reviews_Booking FOREIGN KEY (BookingId) REFERENCES Bookings(Id),
@@ -96,6 +101,7 @@ CREATE TABLE Guides (
     DailyRate   DECIMAL(10,2) NULL,
     Rating      DECIMAL(3,2) NOT NULL DEFAULT 0,
     TotalReviews INT NOT NULL DEFAULT 0,
+    IsVerified  BIT NOT NULL DEFAULT 0,
     IsActive    BIT NOT NULL DEFAULT 1,
     CreatedAt   DATETIME2 DEFAULT SYSUTCDATETIME(),
     UpdatedAt   DATETIME2 DEFAULT SYSUTCDATETIME(),
@@ -257,6 +263,80 @@ CREATE INDEX IX_GRoT_Tourist ON GuideReviewsOfTourists(TouristID);
 CREATE INDEX IX_GRoT_Guide   ON GuideReviewsOfTourists(GuideID);
 
 -- =============================================
+-- GuideTours Table Schema
+-- Stores tour packages created by guide user accounts.
+-- =============================================
+
+CREATE TABLE GuideTours (
+    Id            INT IDENTITY PRIMARY KEY,
+    GuideId       INT NOT NULL,
+    Title         NVARCHAR(150) NOT NULL,
+    Description   NVARCHAR(MAX) NULL,
+    Location      NVARCHAR(150) NULL,
+    Price         DECIMAL(10,2) NOT NULL,
+    DurationHours INT NOT NULL DEFAULT 8,
+    MaxGroupSize  INT NOT NULL DEFAULT 10,
+    Category      NVARCHAR(100) NULL,
+    Difficulty    NVARCHAR(50) NULL,
+    MeetingPoint  NVARCHAR(255) NULL,
+    Itinerary     NVARCHAR(MAX) NULL,
+    ImageUrl      NVARCHAR(1000) NULL,
+    Included      NVARCHAR(MAX) NULL,
+    Highlights    NVARCHAR(MAX) NULL,
+    Languages     NVARCHAR(255) NULL,
+    ViewCount     INT NOT NULL DEFAULT 0,
+    IsActive      BIT NOT NULL DEFAULT 1,
+    CreatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
+    UpdatedAt     DATETIME2 DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT FK_GuideTours_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id),
+    CONSTRAINT CHK_GuideTours_Price CHECK (Price >= 0),
+    CONSTRAINT CHK_GuideTours_Duration CHECK (DurationHours > 0),
+    CONSTRAINT CHK_GuideTours_GroupSize CHECK (MaxGroupSize > 0)
+);
+
+CREATE INDEX IX_GuideTours_Guide ON GuideTours(GuideId);
+CREATE INDEX IX_GuideTours_Active ON GuideTours(IsActive);
+
+CREATE TABLE TouristFavorites (
+    Id INT IDENTITY PRIMARY KEY,
+    TouristUserId INT NOT NULL,
+    GuideTourId INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_TouristFavorites_User FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_TouristFavorites_Tour FOREIGN KEY (GuideTourId) REFERENCES GuideTours(Id) ON DELETE CASCADE,
+    CONSTRAINT UQ_TouristFavorites_UserTour UNIQUE (TouristUserId, GuideTourId)
+);
+CREATE INDEX IX_TouristFavorites_User ON TouristFavorites(TouristUserId);
+
+CREATE TABLE TouristFavoriteGuides (
+    Id INT IDENTITY PRIMARY KEY,
+    TouristUserId INT NOT NULL,
+    GuideUserId INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_TouristFavoriteGuides_Tourist FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_TouristFavoriteGuides_Guide FOREIGN KEY (GuideUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT UQ_TouristFavoriteGuides_Pair UNIQUE (TouristUserId, GuideUserId)
+);
+CREATE INDEX IX_TouristFavoriteGuides_Tourist ON TouristFavoriteGuides(TouristUserId);
+
+CREATE TABLE TouristNotifications (
+    Id INT IDENTITY PRIMARY KEY,
+    TouristUserId INT NOT NULL,
+    Type NVARCHAR(40) NOT NULL,
+    Title NVARCHAR(160) NOT NULL,
+    Body NVARCHAR(500) NULL,
+    LinkUrl NVARCHAR(300) NULL,
+    IsRead BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_TouristNotifications_User FOREIGN KEY (TouristUserId) REFERENCES Users(Id) ON DELETE CASCADE
+);
+CREATE INDEX IX_TouristNotifications_UserDate ON TouristNotifications(TouristUserId, CreatedAt DESC);
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Bookings_GuideTours')
+    ALTER TABLE Bookings ADD CONSTRAINT FK_Bookings_GuideTours FOREIGN KEY (TourId) REFERENCES GuideTours(Id);
+
+-- =============================================
 -- Bids Table Schema
 -- Tourists place custom price offers on a guide's services.
 -- GuideUserID references Users.Id (matches Bookings/Reviews FK convention).
@@ -302,4 +382,32 @@ CREATE TABLE GuideAvailability (
 );
 
 CREATE INDEX IX_GuideAvailability_GuideId ON GuideAvailability(GuideId);
+
+CREATE TABLE GuideNotifications (
+    Id INT IDENTITY PRIMARY KEY,
+    GuideUserId INT NOT NULL,
+    Type NVARCHAR(40) NOT NULL,
+    Title NVARCHAR(160) NOT NULL,
+    Body NVARCHAR(500) NULL,
+    LinkUrl NVARCHAR(300) NULL,
+    IsRead BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_GuideNotifications_User FOREIGN KEY (GuideUserId) REFERENCES Users(Id) ON DELETE CASCADE
+);
+CREATE INDEX IX_GuideNotifications_UserDate ON GuideNotifications(GuideUserId, CreatedAt DESC);
+
+CREATE TABLE GuideVerificationRequests (
+    Id INT IDENTITY PRIMARY KEY,
+    GuideUserId INT NOT NULL,
+    RequestNote NVARCHAR(2000) NOT NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (Status IN ('pending','approved','rejected')),
+    AdminNote NVARCHAR(1000) NULL,
+    RequestedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    ReviewedAt DATETIME2 NULL,
+    ReviewedByUserId INT NULL,
+    CONSTRAINT FK_GuideVerificationRequests_Guide FOREIGN KEY (GuideUserId) REFERENCES Users(Id),
+    CONSTRAINT FK_GuideVerificationRequests_Admin FOREIGN KEY (ReviewedByUserId) REFERENCES Users(Id)
+);
+CREATE UNIQUE INDEX UX_GuideVerificationRequests_Pending ON GuideVerificationRequests(GuideUserId) WHERE Status = 'pending';
+CREATE INDEX IX_GuideVerificationRequests_StatusDate ON GuideVerificationRequests(Status, RequestedAt DESC);
 

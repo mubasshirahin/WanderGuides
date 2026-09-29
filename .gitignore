@@ -7,8 +7,10 @@ build/
 *.out.log
 *.err.log
 
-# One-time data / seed / migration scripts
-server/scripts/
+# One-time data / migration scripts (keep seed.js and migrate-tourist-ui.js tracked)
+server/scripts/cleanup-*.js
+server/scripts/migrate-guide-*.js
+server/scripts/migrate-tour-*.js
 db/seed*.sql
 db/cleanup*.sql
 db/aggregate-queries.sql

@@ -6,6 +6,12 @@ function escapeLike(value) {
   return String(value).replace(/[%_[\]]/g, (ch) => `[${ch}]`);
 }
 
+function positiveInteger(value, fallback, maximum) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, maximum);
+}
+
 /**
  * GET /api/guides/explore
  * Public list of active guides with search, filters, and pagination.
@@ -18,11 +24,22 @@ export async function exploreGuides(req, res) {
     minPrice,
     maxPrice,
     minRating,
-    page = 1,
-    pageSize = 12,
+    sort = 'rating',
+    page: requestedPage = 1,
+    pageSize: requestedPageSize = 12,
   } = req.query;
 
+  const page = positiveInteger(requestedPage, 1, 1000000);
+  const pageSize = positiveInteger(requestedPageSize, 12, 100);
   const offset = (page - 1) * pageSize;
+
+  const orderBy = {
+    rating: 'g.Rating DESC, g.TotalReviews DESC, g.Id DESC',
+    price_asc: 'COALESCE(g.DailyRate, g.RatePerDay) ASC, g.Id DESC',
+    price_desc: 'COALESCE(g.DailyRate, g.RatePerDay) DESC, g.Id DESC',
+    reviews: 'g.TotalReviews DESC, g.Rating DESC, g.Id DESC',
+    newest: 'g.Id DESC',
+  }[sort] || 'g.Rating DESC, g.TotalReviews DESC, g.Id DESC';
 
   const where = [
     'g.IsActive = 1',
@@ -43,9 +60,9 @@ export async function exploreGuides(req, res) {
     SELECT
       g.Id, g.UserID, g.FullName, g.City, g.Bio, g.Specialties, g.Languages,
       g.HourlyRate, COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate,
-      g.Rating, g.TotalReviews, u.AvatarUrl
+      g.Rating, g.TotalReviews, g.IsVerified, u.AvatarUrl
     ${base}
-    ORDER BY g.Rating DESC, g.TotalReviews DESC, g.Id DESC
+    ORDER BY ${orderBy}
     OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
   `;
   const countSql = `SELECT COUNT(*) AS total ${base}`;
@@ -79,7 +96,7 @@ export async function getGuideEx(req, res) {
       g.Id, g.UserID, g.FullName, g.Email, g.Phone, g.City, g.Bio,
       g.Specialties, g.Languages, g.HourlyRate,
       COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate,
-      g.Rating, g.TotalReviews, g.IsActive, u.AvatarUrl
+      g.Rating, g.TotalReviews, g.IsActive, g.IsVerified, u.AvatarUrl
     FROM Guides g
     LEFT JOIN Users u ON u.Id = g.UserID
     WHERE g.Id = @id AND g.IsActive = 1
@@ -98,7 +115,7 @@ export async function getGuideEx(req, res) {
     // Live DB: Reviews uses ReviewerId/RevieweeId/ReviewerRole.
     reviewsSql = `
       SELECT
-        r.Id, r.Rating, r.Comment, r.CreatedAt,
+        r.Id, r.Rating, r.Comment, r.GuideResponse, r.GuideResponseAt, r.CreatedAt,
         tourist.FullName AS TouristName, tourist.AvatarUrl AS TouristAvatarUrl
       FROM Reviews r
       INNER JOIN Users tourist ON tourist.Id = r.ReviewerId
@@ -109,7 +126,7 @@ export async function getGuideEx(req, res) {
     // schema.sql design: Reviews uses TouristUserId/GuideId.
     reviewsSql = `
       SELECT
-        r.Id, r.Rating, r.Comment, r.CreatedAt,
+        r.Id, r.Rating, r.Comment, r.GuideResponse, r.GuideResponseAt, r.CreatedAt,
         tourist.FullName AS TouristName, tourist.AvatarUrl AS TouristAvatarUrl
       FROM Reviews r
       INNER JOIN Users tourist ON tourist.Id = r.TouristUserId
@@ -119,7 +136,33 @@ export async function getGuideEx(req, res) {
   }
   const reviews = await query(reviewsSql, reviewsParams);
 
-  res.json({ ok: true, guide: { ...rows[0], reviews } });
+  // Get completed tour stats and last 5 completed bookings
+  const tourStats = await query(
+    `SELECT COUNT(*) AS totalCompleted
+     FROM Bookings WHERE GuideId = @guideUserID AND Status = 'completed'`,
+    { guideUserID }
+  );
+
+  const recentBookings = await query(
+    `SELECT TOP 5 b.Id, b.Notes AS TourName, b.StartDate, b.EndDate,
+            b.TotalAmount, b.FinalPrice, b.CreatedAt,
+            u.FullName AS TouristName
+     FROM Bookings b
+     INNER JOIN Users u ON u.Id = b.TouristUserId
+     WHERE b.GuideId = @guideUserID AND b.Status = 'completed'
+     ORDER BY b.EndDate DESC`,
+    { guideUserID }
+  );
+
+  res.json({
+    ok: true,
+    guide: {
+      ...rows[0],
+      reviews,
+      totalCompleted: tourStats[0]?.totalCompleted || 0,
+      recentBookings,
+    }
+  });
 }
 
 /** CREATE — INSERT a new guide */
@@ -188,7 +231,7 @@ export function createListGuides(queryFn = query) {
       SELECT g.Id, g.UserID, g.FullName, g.Email, g.Phone, g.City, g.Bio,
              g.Specialties, g.Languages, g.HourlyRate,
              COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate,
-             g.Rating, g.TotalReviews, g.IsActive, g.CreatedAt, g.UpdatedAt,
+             g.Rating, g.TotalReviews, g.IsActive, g.IsVerified, g.CreatedAt, g.UpdatedAt,
              u.AvatarUrl
       ${baseSql}
       ORDER BY ${orderBy}
@@ -294,7 +337,7 @@ export async function updateGuideProfile(req, res) {
   const userId = req.user?.id;
   if (!userId) throw new AppError('Unauthorized', 401);
 
-  const { bio, city, specialties, languages, hourlyRate, dailyRate } = req.body || {};
+  const { avatarUrl, bio, city, specialties, languages, hourlyRate, dailyRate } = req.body || {};
 
   const params = {
     userId,
@@ -351,6 +394,13 @@ export async function updateGuideProfile(req, res) {
     );
   }
 
+  if (avatarUrl !== undefined) {
+    await query('UPDATE Users SET AvatarUrl = @avatarUrl WHERE Id = @userId', {
+      userId,
+      avatarUrl: avatarUrl || null,
+    });
+  }
+
   res.json({ ok: true, message: 'Profile updated' });
 }
 
@@ -367,6 +417,120 @@ export async function deleteGuide(req, res) {
   }
 
   res.json({ ok: true, message: 'Guide deleted' });
+}
+
+/**
+ * GET /api/guides/tours/browse
+ * Public list of active tour packages from all guides, with search, filters, and pagination.
+ */
+export async function browseTours(req, res) {
+  const {
+    location,
+    keyword,
+    category,
+    minPrice,
+    maxPrice,
+    difficulty,
+    minRating,
+    sort = 'newest',
+    page: requestedPage = 1,
+    pageSize: requestedPageSize = 12,
+  } = req.query;
+
+  const page = positiveInteger(requestedPage, 1, 1000000);
+  const pageSize = positiveInteger(requestedPageSize, 12, 100);
+  const offset = (page - 1) * pageSize;
+
+  const availableDate = req.query.availableDate || null;
+  if (availableDate && (!/^\d{4}-\d{2}-\d{2}$/.test(availableDate) || Number.isNaN(Date.parse(`${availableDate}T00:00:00Z`)))) {
+    throw new AppError('availableDate must be a valid date', 400);
+  }
+  for (const [name, value] of [['minPrice', minPrice], ['maxPrice', maxPrice], ['minRating', minRating]]) {
+    if (value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0 || (name === 'minRating' && Number(value) > 5))) {
+      throw new AppError(`${name} is invalid`, 400);
+    }
+  }
+
+  const orderBy = {
+    newest: 'gt.CreatedAt DESC, gt.Id DESC',
+    price_asc: 'gt.Price ASC, gt.Id DESC',
+    price_desc: 'gt.Price DESC, gt.Id DESC',
+    rating: 'g.Rating DESC, g.TotalReviews DESC, gt.Id DESC',
+  }[sort] || 'gt.CreatedAt DESC, gt.Id DESC';
+
+  const where = [
+    'gt.IsActive = 1',
+    'g.IsActive = 1',
+    '(@location IS NULL OR gt.Location LIKE @location)',
+    '(@keyword IS NULL OR (gt.Title LIKE @keyword OR gt.Description LIKE @keyword OR gt.Highlights LIKE @keyword OR gt.Location LIKE @keyword OR gt.Category LIKE @keyword OR gt.Difficulty LIKE @keyword OR gt.MeetingPoint LIKE @keyword OR gt.Languages LIKE @keyword))',
+    '(@category IS NULL OR gt.Category = @category)',
+    '(@difficulty IS NULL OR gt.Difficulty = @difficulty)',
+    '(@minPrice IS NULL OR gt.Price >= @minPrice)',
+    '(@maxPrice IS NULL OR gt.Price <= @maxPrice)',
+    '(@minRating IS NULL OR g.Rating >= @minRating)',
+    '(@availableDate IS NULL OR NOT EXISTS (SELECT 1 FROM GuideAvailability ga WHERE ga.GuideId = gt.GuideId AND ga.BlockedDate = @availableDate))',
+    '(@availableDate IS NULL OR NOT EXISTS (SELECT 1 FROM Bookings b WHERE b.GuideId = gt.GuideId AND b.Status IN (\'pending\',\'confirmed\') AND b.StartDate <= @availableDate AND b.EndDate >= @availableDate))',
+  ].join(' AND ');
+
+  const base = `
+    FROM GuideTours gt
+    INNER JOIN Users u ON u.Id = gt.GuideId
+    INNER JOIN Guides g ON g.UserID = u.Id
+    WHERE ${where}
+  `;
+
+  const selectSql = `
+    SELECT
+      gt.Id, gt.Title, gt.Description, gt.Location, gt.Price,
+      gt.DurationHours, gt.MaxGroupSize, gt.Category, gt.Difficulty,
+      gt.MeetingPoint, gt.Itinerary, gt.Included, gt.Highlights, gt.Languages, gt.ImageUrl, gt.CreatedAt,
+      g.Id AS GuideProfileId, g.UserID AS GuideUserId,
+      g.FullName AS GuideName, g.City AS GuideCity,
+      g.Rating AS GuideRating, g.TotalReviews AS GuideReviews, g.HourlyRate, g.DailyRate,
+      u.AvatarUrl AS GuideAvatar
+    ${base}
+    ORDER BY ${orderBy}
+    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+  `;
+  const countSql = `SELECT COUNT(*) AS total ${base}`;
+
+  const params = {
+    location: location ? `%${escapeLike(location)}%` : null,
+    keyword: keyword ? `%${escapeLike(keyword)}%` : null,
+    category: category || null,
+    difficulty: difficulty || null,
+    minPrice: minPrice === undefined ? null : Number(minPrice),
+    maxPrice: maxPrice === undefined ? null : Number(maxPrice),
+    minRating: minRating === undefined ? null : Number(minRating),
+    availableDate,
+    offset,
+    pageSize,
+  };
+
+  const [tours, countRow] = await Promise.all([query(selectSql, params), query(countSql, params)]);
+  const total = Number(countRow[0]?.total || 0);
+
+  res.json({ ok: true, tours, page, pageSize, total });
+}
+
+export async function checkTourAvailability(req, res) {
+  const tourId = Number(req.params.tourId);
+  const date = String(req.query.date || '');
+  if (!Number.isInteger(tourId) || tourId <= 0) throw new AppError('Invalid tour ID', 400);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+    throw new AppError('A valid date is required', 400);
+  }
+  const rows = await query(
+    `SELECT gt.Id,
+       CASE WHEN gt.IsActive = 1 AND g.IsActive = 1
+         AND NOT EXISTS (SELECT 1 FROM GuideAvailability ga WHERE ga.GuideId = gt.GuideId AND ga.BlockedDate = @date)
+         AND NOT EXISTS (SELECT 1 FROM Bookings b WHERE b.GuideId = gt.GuideId AND b.Status IN ('pending','confirmed') AND b.StartDate <= @date AND b.EndDate >= @date)
+       THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsAvailable
+     FROM GuideTours gt INNER JOIN Guides g ON g.UserID = gt.GuideId
+     WHERE gt.Id = @tourId`, { tourId, date }
+  );
+  if (!rows.length) throw new AppError('Tour not found', 404);
+  res.json({ ok: true, available: Boolean(rows[0].IsAvailable), date });
 }
 
 /**

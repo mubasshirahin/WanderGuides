@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Search, MapPin, Star, X, Filter, Loader2, Eye, Clock,
-  CalendarDays, CheckCircle, AlertCircle, Gavel, DollarSign, Coins
+  CalendarDays, CheckCircle, AlertCircle, Gavel, DollarSign, Coins, Mail, Phone, MessageCircle, Heart
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
+import { startConversation } from '../lib/chat.js';
 
 const currency = (n) =>
   n == null || Number.isNaN(Number(n)) ? '—' : `\u09F3${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -62,7 +64,10 @@ function Avatar({ src, name, className = 'h-12 w-12' }) {
 }
 
 export default function ExplorePage({ role }) {
+  const navigate = useNavigate();
   const [guides, setGuides] = useState([]);
+  const [savedGuides, setSavedGuides] = useState([]);
+  const [showingSavedGuides, setShowingSavedGuides] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 12;
@@ -72,6 +77,7 @@ export default function ExplorePage({ role }) {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minRating, setMinRating] = useState('0');
+  const [sortBy, setSortBy] = useState('rating');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -82,9 +88,16 @@ export default function ExplorePage({ role }) {
   const [bookGuide, setBookGuide] = useState(null);    // direct book modal
   const [bidGuide, setBidGuide] = useState(null);      // bid modal
 
-  const [bookForm, setBookForm] = useState({ guideId: '', startDate: '', endDate: '', notes: '' });
+  const [bookForm, setBookForm] = useState({ guideId: '', startDate: '', endDate: '', groupSize: 1, notes: '' });
   const [bidForm, setBidForm] = useState({ guideId: '', offeredPrice: '', startDate: '', endDate: '', message: '' });
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (role !== 'tourist') return;
+    authFetch('/api/tourist/saved-guides').then((response) => response.json()).then((json) => {
+      if (json.ok) setSavedGuides(json.guides || []);
+    }).catch(() => {});
+  }, [role]);
 
   const flash = useCallback((message, kind = 'success') => {
     setNotice({ message, kind });
@@ -101,27 +114,30 @@ export default function ExplorePage({ role }) {
       if (minPrice) params.set('minPrice', minPrice);
       if (maxPrice) params.set('maxPrice', maxPrice);
       if (minRating && Number(minRating) > 0) params.set('minRating', minRating);
+      params.set('sort', sortBy);
       params.set('page', opts.page || page);
       params.set('pageSize', String(pageSize));
 
+      console.log('[Explore] Fetching:', params.toString());
       const res = await fetch(`/api/guides/explore?${params}`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to load guides');
       setGuides(data.guides || []);
       setTotal(data.total || 0);
     } catch (e) {
+      console.error('[Explore] Error:', e);
       setError(e.message);
     } finally {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, keyword, minPrice, maxPrice, minRating]);
+  }, [location, keyword, minPrice, maxPrice, minRating, sortBy]);
 
-  // Debounce keyword; filters trigger immediately.
+  // Debounce keyword; other filters trigger immediately.
   useEffect(() => {
     const t = setTimeout(() => fetchGuides({ page: 1 }), keyword ? 300 : 0);
     return () => clearTimeout(t);
-  }, [fetchGuides, keyword]);
+  }, [fetchGuides, keyword, location, minPrice, maxPrice, minRating, sortBy]);
 
   const openDetail = async (guide) => {
     try {
@@ -148,6 +164,42 @@ export default function ExplorePage({ role }) {
     setBidForm((f) => ({ ...f, guideId: guide.UserID || guide.Id }));
   };
 
+  const messageGuide = async (guide) => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to message a guide.', 'error');
+    if (!guide?.UserID) return flash('This guide has not linked a messaging account yet.', 'error');
+    try {
+      const conversation = await startConversation(guide.UserID);
+      navigate(`/messages?conversation=${conversation.conversationId}`);
+    } catch (e) {
+      flash(e.message, 'error');
+    }
+  };
+
+  const toggleSavedGuide = async (guide) => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to save guides.', 'error');
+    const guideId = Number(guide.UserID || guide.Id);
+    const isSaved = savedGuides.some((item) => Number(item.UserID) === guideId);
+    try {
+      const response = await authFetch(`/api/tourist/saved-guides/${guideId}`, { method: isSaved ? 'DELETE' : 'PUT' });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Could not update saved guides');
+      setSavedGuides((items) => isSaved ? items.filter((item) => Number(item.UserID) !== guideId) : [...items, guide]);
+      flash(isSaved ? 'Guide removed from saved list.' : 'Guide saved.');
+    } catch (err) { flash(err.message, 'error'); }
+  };
+
+  const toggleSavedList = async () => {
+    if (role !== 'tourist') return flash('Sign in as a tourist to view saved guides.', 'error');
+    if (showingSavedGuides) { setShowingSavedGuides(false); return; }
+    try {
+      const response = await authFetch('/api/tourist/saved-guides');
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Could not load saved guides');
+      setSavedGuides(result.guides || []);
+      setShowingSavedGuides(true);
+    } catch (err) { flash(err.message, 'error'); }
+  };
+
   const submitBook = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -160,7 +212,7 @@ export default function ExplorePage({ role }) {
       if (!data.ok) throw new Error(data.message || 'Booking failed');
       flash('Direct booking placed! Pending confirmation.');
       setBookGuide(null);
-      setBookForm({ guideId: '', startDate: '', endDate: '', notes: '' });
+      setBookForm({ guideId: '', startDate: '', endDate: '', groupSize: 1, notes: '' });
     } catch (e) {
       flash(e.message, 'error');
     } finally {
@@ -214,7 +266,7 @@ export default function ExplorePage({ role }) {
         </div>
       )}
 
-      {/* Top bar: search + mobile filter toggle */}
+      {/* Top bar: search */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -226,32 +278,27 @@ export default function ExplorePage({ role }) {
             className="w-full rounded-xl border border-white/10 bg-white/[0.06] py-2.5 pl-10 pr-3 text-sm text-white outline-none transition-all duration-300 placeholder:text-slate-500 focus:border-brand-400 focus:bg-white/[0.1] focus:ring-4 focus:ring-brand-500/15"
           />
         </div>
-        <button
-          onClick={() => setFilterOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.1]"
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-        </button>
       </div>
 
-      {/* Layout: sidebar (desktop) / grid */}
+      {/* Layout: sidebar + grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        {/* Desktop filters */}
-        <aside className="hidden space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:block">
+        {/* Filters sidebar */}
+        <aside className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Filters</h3>
           <FilterPanel
             location={location} setLocation={setLocation}
             minPrice={minPrice} setMinPrice={setMinPrice}
             maxPrice={maxPrice} setMaxPrice={setMaxPrice}
             minRating={minRating} setMinRating={setMinRating}
+            sortBy={sortBy} setSortBy={setSortBy}
           />
         </aside>
 
         {/* Guide grid */}
         <div className="lg:col-span-3">
           <div className="mb-4 flex items-center justify-between text-sm text-slate-400">
-            <span>{loading ? 'Searching…' : `${total} guide${total === 1 ? '' : 's'} found`}</span>
+            <span>{showingSavedGuides ? `${savedGuides.length} saved guides` : `${total} guide${total === 1 ? '' : 's'} found`}</span>
+            {role === 'tourist' && <button type="button" onClick={toggleSavedList} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"><Heart className="h-3.5 w-3.5 text-rose-300" />{showingSavedGuides ? 'Browse all guides' : 'Saved guides'}</button>}
           </div>
 
           {loading && (
@@ -266,17 +313,17 @@ export default function ExplorePage({ role }) {
             </div>
           )}
 
-          {!loading && !error && guides.length === 0 && (
+          {!loading && !error && (showingSavedGuides ? savedGuides : guides).length === 0 && (
             <div className="rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.03] px-6 py-16 text-center">
               <Search className="mx-auto mb-4 h-10 w-10 text-slate-500" />
-              <p className="text-slate-400">No guides match your filters. Try widening the search.</p>
+              <p className="text-slate-400">{showingSavedGuides ? 'No saved guides yet. Save a guide with the heart button.' : 'No guides match your filters. Try widening the search.'}</p>
             </div>
           )}
 
-          {!loading && !error && guides.length > 0 && (
+          {!loading && !error && (showingSavedGuides ? savedGuides : guides).length > 0 && (
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {guides.map((g) => (
+                {(showingSavedGuides ? savedGuides : guides).map((g) => (
                   <GuideCard
                     key={g.Id}
                     guide={g}
@@ -284,6 +331,8 @@ export default function ExplorePage({ role }) {
                     onBook={openBook}
                     onBid={openBid}
                     isTourist={role === 'tourist'}
+                    isSaved={savedGuides.some((item) => Number(item.UserID) === Number(g.UserID || g.Id))}
+                    onSave={toggleSavedGuide}
                   />
                 ))}
               </div>
@@ -329,6 +378,7 @@ export default function ExplorePage({ role }) {
               minPrice={minPrice} setMinPrice={setMinPrice}
               maxPrice={maxPrice} setMaxPrice={setMaxPrice}
               minRating={minRating} setMinRating={setMinRating}
+              sortBy={sortBy} setSortBy={setSortBy}
             />
             <button
               onClick={() => setFilterOpen(false)}
@@ -347,6 +397,7 @@ export default function ExplorePage({ role }) {
             <Avatar src={selected.AvatarUrl} name={selected.FullName} className="h-16 w-16" />
             <div>
               <h2 className="text-xl font-bold text-white">{selected.FullName}</h2>
+              {selected.IsVerified && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300"><CheckCircle className="h-3.5 w-3.5" />Verified guide</span>}
               <p className="flex items-center gap-1 text-sm text-slate-400">
                 <MapPin className="h-3.5 w-3.5 text-brand-400" />
                 {selected.City || 'Various cities'}
@@ -373,27 +424,76 @@ export default function ExplorePage({ role }) {
             </div>
           </div>
 
+          {/* Contact Info */}
+          {(selected.Email || selected.Phone) && (
+            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">Contact Information</p>
+              <div className="space-y-1">
+                {selected.Email && (
+                  <p className="flex items-center gap-2 text-sm text-slate-300">
+                    <Mail className="h-3.5 w-3.5 text-brand-400" /> {selected.Email}
+                  </p>
+                )}
+                {selected.Phone && (
+                  <p className="flex items-center gap-2 text-sm text-slate-300">
+                    <Phone className="h-3.5 w-3.5 text-brand-400" /> {selected.Phone}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {selected.Bio && (
             <div className="mt-5">
-              <h4 className="mb-1 text-sm font-semibold text-slate-200">Bio</h4>
+              <h4 className="mb-1 text-sm font-semibold text-slate-200">About</h4>
               <p className="text-sm leading-relaxed text-slate-300">{selected.Bio}</p>
             </div>
           )}
 
           {(selected.Specialties || selected.Languages) && (
-            <div className="mt-5 flex flex-wrap gap-2">
-              {selected.Specialties?.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
-                <span key={i} className="rounded-full bg-brand-500/15 px-3 py-1 text-xs font-medium text-brand-300">
-                  {s}
-                </span>
-              ))}
-              {selected.Languages?.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
-                <span key={`lang-${i}`} className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-slate-300">
-                  {s}
-                </span>
-              ))}
+            <div className="mt-5">
+              <h4 className="mb-2 text-sm font-semibold text-slate-200">Skills & Languages</h4>
+              <div className="flex flex-wrap gap-2">
+                {selected.Specialties?.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
+                  <span key={i} className="rounded-full bg-brand-500/15 px-3 py-1 text-xs font-medium text-brand-300">
+                    {s}
+                  </span>
+                ))}
+                {selected.Languages?.split(',').map((s) => s.trim()).filter(Boolean).map((s, i) => (
+                  <span key={`lang-${i}`} className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-slate-300">
+                    {s}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* Completed Tours */}
+          <div className="mt-5">
+            <div className="flex items-center gap-2 mb-2">
+              <MapPin className="h-4 w-4 text-brand-400" />
+              <h4 className="text-sm font-semibold text-slate-200">
+                {selected.totalCompleted || 0} Tour{(selected.totalCompleted || 0) !== 1 ? 's' : ''} Completed
+              </h4>
+            </div>
+            {selected.recentBookings && selected.recentBookings.length > 0 ? (
+              <div className="space-y-2">
+                {selected.recentBookings.map((b) => (
+                  <div key={b.Id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{b.TourName || 'Tour'}</p>
+                      <p className="text-xs text-slate-400">
+                        {b.TouristName} · {new Date(b.StartDate).toLocaleDateString()} - {new Date(b.EndDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className="ml-3 text-xs font-bold text-brand-400 whitespace-nowrap">{currency(b.FinalPrice || b.TotalAmount)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No completed tours yet.</p>
+            )}
+          </div>
 
           <h4 className="mt-6 mb-3 text-sm font-semibold text-slate-200">
             Customer reviews ({selected.reviews?.length || 0})
@@ -410,6 +510,7 @@ export default function ExplorePage({ role }) {
                     <Stars rating={r.Rating} />
                   </div>
                   <p className="mt-2 text-sm text-slate-300">{r.Comment}</p>
+                  {r.GuideResponse && <div className="mt-3 rounded-lg border-l-2 border-brand-400/60 bg-brand-500/[0.06] px-3 py-2"><p className="text-xs font-semibold text-brand-300">Guide response</p><p className="mt-1 whitespace-pre-wrap text-sm text-slate-300">{r.GuideResponse}</p></div>}
                   <p className="mt-1 text-xs text-slate-500">{new Date(r.CreatedAt).toLocaleDateString()}</p>
                 </div>
               ))}
@@ -418,7 +519,14 @@ export default function ExplorePage({ role }) {
             <p className="text-sm text-slate-500">No reviews yet.</p>
           )}
 
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <button
+              onClick={() => messageGuide(selected)}
+              disabled={!selected.UserID}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <MessageCircle className="h-4 w-4" /> Message
+            </button>
             <button
               onClick={() => openBook({ Id: selected.Id, UserID: selected.UserID, FullName: selected.FullName })}
               className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-500"
@@ -444,6 +552,7 @@ export default function ExplorePage({ role }) {
             Reserve at the listed rate. Daily rate: {currency(bookGuide.DailyRate)}.
           </p>
           <form onSubmit={submitBook} className="mt-5 space-y-4">
+            <div><label className="mb-1 block text-xs text-slate-400">Group size</label><input type="number" min="1" max="50" required value={bookForm.groupSize} onChange={field('groupSize', setBookForm)} className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white" /></div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs text-slate-400">Start date</label>
@@ -550,15 +659,15 @@ export default function ExplorePage({ role }) {
 }
 
 // ─── Guide card ───────────────────────────────────────────────────────
-function GuideCard({ guide: g, onView, onBook, onBid, isTourist }) {
+function GuideCard({ guide: g, onView, onBook, onBid, isTourist, isSaved, onSave }) {
   return (
     <div className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-500/40 hover:bg-white/[0.05]">
       <div className="flex items-start justify-between">
         <Avatar src={g.AvatarUrl} name={g.FullName} />
-        <Stars rating={g.Rating} />
+        <div className="flex items-center gap-3"><button type="button" onClick={() => onSave(g)} aria-label={isSaved ? 'Remove saved guide' : 'Save guide'} className="rounded-full border border-white/10 p-2 text-slate-300 hover:text-rose-300"><Heart className={`h-4 w-4 ${isSaved ? 'fill-rose-400 text-rose-400' : ''}`} /></button><Stars rating={g.Rating} /></div>
       </div>
 
-      <h3 className="mt-3 text-lg font-semibold text-white">{g.FullName}</h3>
+      <div className="mt-3 flex items-center gap-2"><h3 className="text-lg font-semibold text-white">{g.FullName}</h3>{g.IsVerified && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300"><CheckCircle className="h-3 w-3" />Verified</span>}</div>
       <p className="flex items-center gap-1 text-sm text-slate-400">
         <MapPin className="h-3.5 w-3.5 text-brand-400" />
         {g.City || 'Various cities'}
@@ -612,9 +721,24 @@ function GuideCard({ guide: g, onView, onBook, onBid, isTourist }) {
 }
 
 // ─── Shared filter panel (desktop sidebar + mobile drawer) ──────────
-function FilterPanel({ location, setLocation, minPrice, setMinPrice, maxPrice, setMaxPrice, minRating, setMinRating }) {
+function FilterPanel({ location, setLocation, minPrice, setMinPrice, maxPrice, setMaxPrice, minRating, setMinRating, sortBy, setSortBy }) {
   return (
     <>
+      <div>
+        <label className="mb-1 block text-xs text-slate-400">Sort by</label>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400"
+        >
+          <option value="rating">Top Rated</option>
+          <option value="reviews">Most Reviews</option>
+          <option value="price_asc">Price: Low to High</option>
+          <option value="price_desc">Price: High to Low</option>
+          <option value="newest">Newest</option>
+        </select>
+      </div>
+
       <div>
         <label className="mb-1 block text-xs text-slate-400">Location / City</label>
         <div className="relative">

@@ -5,6 +5,11 @@ import {
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser } from '../lib/demoAuth.js';
+import { Link } from 'react-router-dom';
+import { io } from 'socket.io-client';
+import { Bell, MessageCircle } from 'lucide-react';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 const statusStyles = {
   pending: 'bg-amber-500/15 text-amber-400',
@@ -39,6 +44,7 @@ export default function GuideDashboardPage() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notifications, setNotifications] = useState([]);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -47,7 +53,7 @@ export default function GuideDashboardPage() {
       const res = await authFetch('/api/guide/dashboard');
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to load dashboard');
-      setDashboard(data);
+      setDashboard(data.dashboard || data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -56,6 +62,28 @@ export default function GuideDashboardPage() {
   }, []);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  useEffect(() => {
+    let active = true;
+    authFetch('/api/guide/notifications').then((res) => res.json()).then((json) => {
+      if (active && json.ok) setNotifications(json.notifications || []);
+    }).catch(() => {});
+    const token = sessionStorage.getItem('wg_token');
+    if (!token) return () => { active = false; };
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket', 'polling'] });
+    socket.on('guide_notification:new', (notification) => {
+      setNotifications((items) => [notification, ...items.filter((item) => item.Id !== notification.Id)].slice(0, 30));
+    });
+    return () => { active = false; socket.disconnect(); };
+  }, []);
+
+  const markNotificationRead = async (id) => {
+    try {
+      const response = await authFetch(`/api/guide/notifications/${id}/read`, { method: 'PUT' });
+      const json = await response.json();
+      if (json.ok) setNotifications((items) => items.map((item) => item.Id === id ? { ...item, IsRead: true } : item));
+    } catch { /* keep the notification unread until it can be saved */ }
+  };
 
   const name = user?.FullName || user?.fullName || 'Guide';
   const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -107,34 +135,80 @@ export default function GuideDashboardPage() {
             <MetricCard
               icon={DollarSign}
               label="Total Earnings"
-              value={`৳${Number(dashboard.totalEarnings || 0).toFixed(2)}`}
+              value={`৳${Number(dashboard.stats?.totalEarnings ?? dashboard.totalEarnings ?? 0).toFixed(2)}`}
               color="text-emerald-400"
             />
             <MetricCard
               icon={Map}
               label="Active Tours"
-              value={dashboard.activeTours || 0}
+              value={dashboard.stats?.activeTours ?? dashboard.activeTours ?? 0}
               color="text-sky-400"
             />
             <MetricCard
               icon={Clock}
               label="Pending Bookings"
-              value={dashboard.pendingBookings || 0}
+              value={dashboard.stats?.pendingBookings ?? dashboard.pendingBookings ?? 0}
               color="text-amber-400"
             />
             <MetricCard
               icon={CheckCircle}
               label="Completed Tours"
-              value={dashboard.completedTours || 0}
+              value={dashboard.stats?.completedBookings ?? dashboard.completedTours ?? 0}
               color="text-brand-400"
             />
             <MetricCard
               icon={Star}
               label="Current Rating"
-              value={dashboard.currentRating != null ? Number(dashboard.currentRating).toFixed(1) : '—'}
+              value={(dashboard.stats?.currentRating ?? dashboard.currentRating) != null ? Number(dashboard.stats?.currentRating ?? dashboard.currentRating).toFixed(1) : '—'}
               color="text-amber-400"
             />
           </div>
+
+          <div className="mb-8 grid gap-4 sm:grid-cols-2">
+            <MetricCard icon={DollarSign} label="Completed bookings marked paid" value={`৳${Number(dashboard.stats?.paidEarnings || 0).toFixed(2)}`} color="text-emerald-400" />
+            <MetricCard icon={Clock} label="Completed bookings marked unpaid" value={`৳${Number(dashboard.stats?.unpaidEarnings || 0).toFixed(2)}`} color="text-amber-400" />
+            <MetricCard icon={Clock} label="Expected from upcoming bookings" value={`৳${Number(dashboard.stats?.upcomingPayments || 0).toFixed(2)}`} color="text-sky-400" />
+          </div>
+
+          <section className="mb-8 rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="flex items-center gap-2 text-lg font-bold text-white"><Bell className="h-5 w-5 text-brand-400" />Notifications</h3>
+              <span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs text-brand-300">{notifications.filter((item) => !item.IsRead).length} unread</span>
+            </div>
+            {notifications.length === 0 ? <p className="text-sm text-slate-400">New bookings, tourist messages, and custom tour requests will appear here.</p> : (
+              <div className="space-y-2">
+                {notifications.slice(0, 6).map((item) => (
+                  <div key={item.Id} className={`flex items-start justify-between gap-3 rounded-xl p-3 ${item.IsRead ? 'bg-white/[0.03]' : 'bg-brand-500/[0.08]'}`}>
+                    <div className="flex items-start gap-3">
+                      {item.Type === 'message' ? <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" /> : <Bell className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" />}
+                      <div><p className="text-sm font-semibold text-white">{item.Title}</p><p className="mt-1 text-xs text-slate-400">{item.Body}</p><p className="mt-1 text-[11px] text-slate-500">{formatDate(item.CreatedAt)}</p></div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      {item.LinkUrl && <Link to={item.LinkUrl} className="text-xs text-brand-300 hover:text-white">Open</Link>}
+                      {!item.IsRead && <button onClick={() => markNotificationRead(item.Id)} className="text-xs text-brand-300 hover:text-white">Mark read</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {((dashboard.stats?.pendingBookings || dashboard.recentBookings?.some((b) => b.Status === 'pending')) || dashboard.pendingRequests?.length > 0) && (
+            <div className="mb-8 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-white">You have items that may need attention</p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {dashboard.stats?.pendingBookings ?? dashboard.recentBookings?.filter((b) => b.Status === 'pending').length ?? 0} pending booking request(s) · {dashboard.pendingRequests?.length || 0} open custom request(s)
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Link to="/bookings" className="rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15">Review bookings</Link>
+                  <Link to="/custom-requests" className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-500">Browse requests</Link>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Content Grid: Recent Bookings + Pending Requests */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

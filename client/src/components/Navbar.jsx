@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, Clock } from 'lucide-react';
+import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, Clock, MapPin, ShieldCheck } from 'lucide-react';
 
 const loggedOutLinks = [{ to: '/', label: 'Home' }];
 
 const roleLinks = {
   tourist: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/explore', label: 'Explore', icon: Search },
+    { to: '/explore', label: 'Explore Guides', icon: Search },
+    { to: '/browse-tours', label: 'Browse Tours', icon: MapPin },
     { to: '/messages', label: 'Messages', icon: MessageSquare },
     { to: '/custom-tour', label: 'Custom Tour', icon: ClipboardList },
     { to: '/reviews', label: 'Reviews', icon: Star },
@@ -16,13 +17,16 @@ const roleLinks = {
   guide: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/my-tours', label: 'My Tours', icon: Map },
+    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
     { to: '/custom-requests', label: 'Custom Requests', icon: ClipboardList },
     { to: '/messages', label: 'Messages', icon: MessageSquare },
+    { to: '/reviews', label: 'Reviews', icon: Star },
     { to: '/availability', label: 'Profile', icon: UserCircle },
   ],
   admin: [
     { to: '/guides', label: 'Manage Guides', icon: Search },
     { to: '/guides/new', label: 'Add Guide', icon: Plus },
+    { to: '/guide-verifications', label: 'Verification', icon: ShieldCheck },
     { to: '/bookings', label: 'Bookings', icon: CalendarDays },
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/profile', label: 'Profile', icon: UserCircle },

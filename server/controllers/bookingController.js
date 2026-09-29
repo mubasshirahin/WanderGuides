@@ -1,8 +1,9 @@
-import { query } from '../config/db.js';
+import sql, { query, getPool } from '../config/db.js';
 import AppError from '../utils/AppError.js';
+import { getIO } from '../utils/socket.js';
+import { notifyGuide } from '../utils/guideNotifications.js';
 
 const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'completed', 'cancelled']);
-const GUIDE_STATUS_UPDATES = new Set(['confirmed', 'completed']);
 const TOURIST_STATUS_UPDATES = new Set(['cancelled']);
 
 function parseBookingId(id) {
@@ -58,12 +59,22 @@ export const getAllBookings = async (req, res) => {
       b.Id,
       b.TouristUserId,
       b.GuideId,
+      b.TourId,
+      b.GroupSize,
       b.StartDate,
       b.EndDate,
       b.Status,
       b.TotalAmount,
+      b.PaymentStatus,
       b.Notes,
       b.CreatedAt,
+      DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) AS CancellationDeadline,
+      CASE WHEN SYSUTCDATETIME() < DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS CanCancel,
+      gt.Title AS TourTitle,
+      gt.Itinerary,
+      gt.MeetingPoint,
+      gt.Location AS TourLocation,
+      gt.ImageUrl AS TourImageUrl,
       tourist.FullName AS TouristName,
       tourist.Email AS TouristEmail,
       guide.FullName AS GuideName,
@@ -74,6 +85,7 @@ export const getAllBookings = async (req, res) => {
     FROM Bookings b
     INNER JOIN Users tourist ON tourist.Id = b.TouristUserId
     INNER JOIN Users guide ON guide.Id = b.GuideId
+    LEFT JOIN GuideTours gt ON gt.Id = b.TourId
     WHERE ${whereClause}
       AND (@status IS NULL OR b.Status = @status)
     ORDER BY b.CreatedAt DESC, b.Id DESC
@@ -89,14 +101,15 @@ export const getAllBookings = async (req, res) => {
 
 /** POST /api/bookings - placeholder. Validate availability + insert here. */
 export const createBooking = async (req, res) => {
-  const { guideId, startDate, endDate, notes } = req.body || {};
+  const { guideId, tourId, startDate, endDate, notes } = req.body || {};
+  const groupSize = Number(req.body?.groupSize || 1);
 
   // tourist id should come from authenticated token
   const touristId = req.user && req.user.id;
   if (!touristId) throw new AppError('Unauthorized', 401);
 
-  if (!guideId || !startDate || !endDate) {
-    throw new AppError('guideId, startDate and endDate are required', 400);
+  if ((!guideId && !tourId) || !startDate || !endDate) {
+    throw new AppError('guideId or tourId, startDate and endDate are required', 400);
   }
 
   const sDate = new Date(startDate);
@@ -107,69 +120,126 @@ export const createBooking = async (req, res) => {
 
   if (eDate < sDate) throw new AppError('endDate must be on or after startDate', 400);
 
-  // Verify guide exists and get rate + linked user (Bookings.GuideId -> Users.Id).
-  const guideRow =
-    (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE Id = @id', { id: guideId }))[0] ||
-    (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE UserID = @id', { id: guideId }))[0];
+  let guideRow;
+  let tourTitle = null;
+  let packagePrice = null;
+
+  if (tourId) {
+    if (sDate.getTime() !== eDate.getTime()) {
+      throw new AppError('Tour package bookings must be for a single date', 400);
+    }
+    const tourRows = await query(
+      `SELECT gt.GuideId AS UserID, gt.Title, gt.Price, gt.MaxGroupSize,
+              COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate
+       FROM GuideTours gt
+       INNER JOIN Guides g ON g.UserID = gt.GuideId
+       WHERE gt.Id = @tourId AND gt.IsActive = 1 AND g.IsActive = 1`,
+      { tourId }
+    );
+    guideRow = tourRows[0];
+    if (guideRow) {
+      tourTitle = guideRow.Title;
+      packagePrice = Number(guideRow.Price);
+    }
+    if (!guideRow) throw new AppError('Tour package is unavailable', 404);
+    if (!Number.isInteger(groupSize) || groupSize < 1 || groupSize > Number(guideRow.MaxGroupSize)) {
+      throw new AppError(`Group size must be between 1 and ${guideRow.MaxGroupSize}`, 400);
+    }
+    if (guideId && Number(guideId) !== Number(guideRow.UserID)) {
+      throw new AppError('Tour package does not belong to this guide', 400);
+    }
+  } else {
+    // Prefer the account ID used by the API; fall back to a directory profile ID.
+    guideRow =
+      (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE UserID = @id AND IsActive = 1', { id: guideId }))[0] ||
+      (await query('SELECT UserID, COALESCE(DailyRate, RatePerDay) AS DailyRate FROM Guides WHERE Id = @id AND IsActive = 1', { id: guideId }))[0];
+  }
   if (!guideRow) throw new AppError('Guide not found', 404);
   const guideUserId = guideRow.UserID;
   if (!guideUserId) throw new AppError('This guide is not linked to an account yet', 409);
 
   const ratePerDay = Number(guideRow.DailyRate) || 0;
 
-  // Check for blocked dates in GuideAvailability
-  const blockedDatesSql = `
-    SELECT BlockedDate FROM GuideAvailability
-    WHERE GuideId = @guideId
-      AND BlockedDate >= @startDate
-      AND BlockedDate <= @endDate
-  `;
-  const blockedDates = await query(blockedDatesSql, { guideId: guideUserId, startDate, endDate });
-  if (blockedDates.length) {
-    const blocked = blockedDates.map(r => r.BlockedDate);
-    throw new AppError(
-      `Guide has blocked these dates: ${blocked.join(', ')}`,
-      409
-    );
-  }
-
-  // Check overlapping bookings (pending or confirmed)
-  const overlapSql = `
-    SELECT Id FROM Bookings
-    WHERE GuideId = @guideId
-      AND Status IN ('pending','confirmed')
-      AND NOT (EndDate < @startDate OR StartDate > @endDate)
-  `;
-  const overlapping = await query(overlapSql, { guideId: guideUserId, startDate, endDate });
-  if (overlapping.length) throw new AppError('Guide is already booked for the selected dates', 409);
-
   // Calculate total amount (inclusive days)
   const msPerDay = 24 * 60 * 60 * 1000;
   const days = Math.round((eDate - sDate) / msPerDay) + 1;
-  const totalAmount = Number((ratePerDay * days).toFixed(2));
+  const totalAmount = packagePrice === null
+    ? Number((ratePerDay * days).toFixed(2))
+    : Number(packagePrice.toFixed(2));
+  const bookingNotes = [tourTitle ? `Tour package: ${tourTitle}` : null, notes?.trim() || null]
+    .filter(Boolean)
+    .join(' — ')
+    .slice(0, 500) || null;
 
   const insertSql = `
-    INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, BookingType, TotalAmount, FinalPrice, Notes)
-    OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate, INSERTED.EndDate, INSERTED.Status, INSERTED.BookingType, INSERTED.TotalAmount, INSERTED.FinalPrice, INSERTED.Notes, INSERTED.CreatedAt
-    VALUES (@touristId, @guideUserId, @startDate, @endDate, 'pending', 'direct', @totalAmount, @totalAmount, @notes)
+    INSERT INTO Bookings (TouristUserId, GuideId, TourId, GroupSize, StartDate, EndDate, Status, BookingType, TotalAmount, FinalPrice, Notes)
+    OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.TourId, INSERTED.GroupSize, INSERTED.StartDate, INSERTED.EndDate, INSERTED.Status, INSERTED.BookingType, INSERTED.TotalAmount, INSERTED.FinalPrice, INSERTED.PaymentStatus, INSERTED.Notes, INSERTED.CreatedAt
+    VALUES (@touristId, @guideUserId, @tourId, @groupSize, @startDate, @endDate, 'pending', 'direct', @totalAmount, @totalAmount, @notes)
   `;
 
   const params = {
     touristId,
     guideUserId,
+    tourId: tourId ? Number(tourId) : null,
+    groupSize,
     startDate,
     endDate,
     totalAmount,
-    notes: notes || null,
+    notes: bookingNotes,
   };
 
+  const pool = await getPool();
+  const transaction = pool.transaction();
+  let transactionStarted = false;
+  let createdBooking;
   try {
-    const rows = await query(insertSql, params);
-    res.status(201).json({ ok: true, booking: rows[0] });
+    await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+    transactionStarted = true;
+    const runInTransaction = async (statement, values) => {
+      const request = transaction.request();
+      Object.entries(values).forEach(([key, value]) => request.input(key, value));
+      return (await request.query(statement)).recordset;
+    };
+
+    const blockedDates = await runInTransaction(
+      `SELECT BlockedDate FROM GuideAvailability WITH (UPDLOCK, HOLDLOCK)
+       WHERE GuideId = @guideId AND BlockedDate >= @startDate AND BlockedDate <= @endDate`,
+      { guideId: guideUserId, startDate, endDate }
+    );
+    if (blockedDates.length) {
+      throw new AppError(`Guide has blocked these dates: ${blockedDates.map((row) => row.BlockedDate).join(', ')}`, 409);
+    }
+
+    const overlapping = await runInTransaction(
+      `SELECT Id FROM Bookings WITH (UPDLOCK, HOLDLOCK)
+       WHERE GuideId = @guideId AND Status IN ('pending', 'confirmed')
+         AND NOT (EndDate < @startDate OR StartDate > @endDate)`,
+      { guideId: guideUserId, startDate, endDate }
+    );
+    if (overlapping.length) throw new AppError('Guide is already booked for the selected dates', 409);
+
+    [createdBooking] = await runInTransaction(insertSql, params);
+    await transaction.commit();
   } catch (err) {
+    if (transactionStarted) await transaction.rollback().catch(() => {});
+    if (err instanceof AppError) throw err;
     console.error('[createBooking]', err);
     throw new AppError('Failed to create booking', 500);
   }
+
+  try {
+    const touristRows = await query('SELECT FullName FROM Users WHERE Id = @touristId', { touristId });
+    await notifyGuide({
+      guideId: guideUserId,
+      type: 'booking',
+      title: 'New booking request',
+      body: `${touristRows[0]?.FullName || 'A tourist'} requested a booking for ${new Date(startDate).toLocaleDateString()}.`,
+      linkUrl: '/bookings',
+    });
+  } catch (notificationError) {
+    console.error('[createBooking] Could not notify guide:', notificationError.message);
+  }
+  res.status(201).json({ ok: true, booking: createdBooking });
 };
 
 export function createUpdateBookingStatus(queryFn = query) {
@@ -183,7 +253,7 @@ export function createUpdateBookingStatus(queryFn = query) {
 
     const status = normalizeStatus(req.body && req.body.status);
     const rows = await queryFn(
-      'SELECT Id, TouristUserId, GuideId, Status FROM Bookings WHERE Id = @bookingId',
+      'SELECT Id, TouristUserId, GuideId, Status, StartDate FROM Bookings WHERE Id = @bookingId',
       { bookingId }
     );
     const booking = rows[0];
@@ -191,11 +261,16 @@ export function createUpdateBookingStatus(queryFn = query) {
     if (!booking) throw new AppError('Booking not found', 404);
 
     if (role === 'guide') {
-      if (!GUIDE_STATUS_UPDATES.has(status)) {
-        throw new AppError("Guides can only set bookings to 'confirmed' or 'completed'", 400);
-      }
       if (Number(booking.GuideId) !== Number(userId)) {
         throw new AppError('Forbidden', 403);
+      }
+      const currentStatus = String(booking.Status).toLowerCase();
+      const validGuideTransition =
+        (status === 'confirmed' && currentStatus === 'pending') ||
+        (status === 'completed' && currentStatus === 'confirmed') ||
+        (status === 'cancelled' && currentStatus === 'pending');
+      if (!validGuideTransition) {
+        throw new AppError('Guides can confirm or decline pending bookings, then mark confirmed tours completed', 400);
       }
     }
 
@@ -209,6 +284,9 @@ export function createUpdateBookingStatus(queryFn = query) {
       if (!['pending', 'confirmed'].includes(String(booking.Status).toLowerCase())) {
         throw new AppError('Only pending or confirmed bookings can be cancelled', 400);
       }
+      if (booking.StartDate && new Date(booking.StartDate).getTime() - Date.now() < 48 * 60 * 60 * 1000) {
+        throw new AppError('Cancellation closes 48 hours before the tour starts', 400);
+      }
     }
 
     const updatedRows = await queryFn(
@@ -220,6 +298,35 @@ export function createUpdateBookingStatus(queryFn = query) {
        WHERE Id = @bookingId`,
       { bookingId, status }
     );
+
+    if (queryFn === query && ['confirmed', 'cancelled'].includes(status) && role === 'guide') {
+      const title = status === 'confirmed' ? 'Booking confirmed' : 'Booking cancelled';
+      const body = status === 'confirmed'
+        ? 'Your guide confirmed your booking.'
+        : 'Your guide cancelled your booking.';
+      const notificationRows = await query(
+        `INSERT INTO TouristNotifications (TouristUserId, Type, Title, Body, LinkUrl)
+         OUTPUT INSERTED.Id, INSERTED.Type, INSERTED.Title, INSERTED.Body, INSERTED.LinkUrl, INSERTED.IsRead, INSERTED.CreatedAt
+         VALUES (@userId, 'booking', @title, @body, '/dashboard')`,
+        { userId: booking.TouristUserId, title, body }
+      );
+      try { getIO().to(String(booking.TouristUserId)).emit('notification:new', notificationRows[0]); } catch { /* persisted notification remains available */ }
+    }
+
+    if (queryFn === query && status === 'cancelled' && role === 'tourist') {
+      try {
+        const touristRows = await query('SELECT FullName FROM Users WHERE Id = @touristId', { touristId: booking.TouristUserId });
+        await notifyGuide({
+          guideId: booking.GuideId,
+          type: 'booking',
+          title: 'Booking cancelled',
+          body: `${touristRows[0]?.FullName || 'A tourist'} cancelled booking #${bookingId}.`,
+          linkUrl: '/bookings',
+        });
+      } catch (notificationError) {
+        console.error('[updateBookingStatus] Could not notify guide:', notificationError.message);
+      }
+    }
 
     res.json({ ok: true, booking: updatedRows[0] });
   };

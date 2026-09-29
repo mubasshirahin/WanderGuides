@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import MessagesInbox from '../components/MessagesInbox.jsx';
 
 export default function MessagesPage({ role }) {
   const [currentUser, setCurrentUser] = useState(null);
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const stored = sessionStorage.getItem('wg_user');
@@ -23,7 +25,7 @@ export default function MessagesPage({ role }) {
         title="Messages"
         description="Chat with your guides and tourists in real time."
       />
-      <MessagesInbox currentUser={currentUser} />
+      <MessagesInbox currentUser={currentUser} initialConversationId={searchParams.get('conversation')} />
     </div>
   );
 }

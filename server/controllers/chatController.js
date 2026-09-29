@@ -65,8 +65,16 @@ export const getConversations = async (req, res) => {
 export const getMessages = async (req, res) => {
   const userId = req.user && req.user.id;
   const { conversationId } = req.params;
+  const requestedLimit = Number(req.query?.limit ?? 50);
+  const beforeMessageId = req.query?.before ? Number(req.query.before) : null;
 
   if (!userId) throw new AppError('Unauthorized', 401);
+  if (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100) {
+    throw new AppError('limit must be between 1 and 100', 400);
+  }
+  if (beforeMessageId !== null && (!Number.isSafeInteger(beforeMessageId) || beforeMessageId < 1)) {
+    throw new AppError('before must be a positive message ID', 400);
+  }
 
   const convoRows = await query(
     'SELECT ConversationID, TouristID, GuideID FROM Conversations WHERE ConversationID = @conversationId',
@@ -76,7 +84,7 @@ export const getMessages = async (req, res) => {
   if (!convoRows.length) throw new AppError('Conversation not found', 404);
 
   const convo = convoRows[0];
-  if (convo.TouristID !== userId && convo.GuideID !== userId) {
+  if (Number(convo.TouristID) !== Number(userId) && Number(convo.GuideID) !== Number(userId)) {
     throw new AppError('Forbidden', 403);
   }
 
@@ -92,18 +100,33 @@ export const getMessages = async (req, res) => {
      FROM Messages m
      INNER JOIN Users u ON u.Id = m.SenderID
      WHERE m.ConversationID = @conversationId
-     ORDER BY m.CreatedAt ASC, m.MessageID ASC`,
-    { conversationId }
+       AND (@beforeMessageId IS NULL OR m.MessageID < @beforeMessageId)
+     ORDER BY m.MessageID DESC
+     OFFSET 0 ROWS FETCH NEXT @pageLimit ROWS ONLY`,
+    { conversationId, beforeMessageId, pageLimit: requestedLimit + 1 }
   );
 
-  await query(
-    `UPDATE Messages
-     SET IsRead = 1
-     WHERE ConversationID = @conversationId AND ReceiverID = @userId AND IsRead = 0`,
-    { conversationId, userId }
-  );
+  const hasMore = messages.length > requestedLimit;
+  const pageRows = messages.slice(0, requestedLimit);
+  const nextBeforeId = hasMore ? pageRows[pageRows.length - 1]?.MessageID : null;
+  pageRows.reverse();
 
-  const normalized = messages.map((row) => ({
+  if (pageRows.length) {
+    const readIds = pageRows.map((row) => row.MessageID);
+    const readParams = { conversationId, userId };
+    const readIdList = readIds.map((id, index) => {
+      readParams[`messageId${index}`] = id;
+      return `@messageId${index}`;
+    }).join(', ');
+    await query(
+      `UPDATE Messages SET IsRead = 1
+       WHERE ConversationID = @conversationId AND ReceiverID = @userId AND IsRead = 0
+         AND MessageID IN (${readIdList})`,
+      readParams
+    );
+  }
+
+  const normalized = pageRows.map((row) => ({
     messageId: row.MessageID,
     text: row.MessageText,
     isRead: row.IsRead,
@@ -114,7 +137,7 @@ export const getMessages = async (req, res) => {
     isMine: row.SenderID === userId,
   }));
 
-  res.json({ ok: true, messages: normalized });
+  res.json({ ok: true, messages: normalized, hasMore, nextBeforeId });
 };
 
 /**

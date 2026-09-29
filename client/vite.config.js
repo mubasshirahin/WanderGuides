@@ -9,6 +9,11 @@ export default defineConfig({
     proxy: {
       // Proxy API calls to the Express backend during dev.
       '/api': 'http://localhost:5050',
+      // Keep Socket.IO on the same origin as the app while forwarding upgrades.
+      '/socket.io': {
+        target: 'http://localhost:5050',
+        ws: true,
+      },
     },
   },
 });

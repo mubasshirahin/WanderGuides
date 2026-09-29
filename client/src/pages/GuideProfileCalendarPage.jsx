@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Loader2, User, Mail, Shield, MapPin, Star,
-  AlertCircle, X, Clock, Globe, DollarSign, Edit3, Save,
+  AlertCircle, X, Clock, Globe, DollarSign, Edit3, Save, CalendarDays, ChevronLeft, ChevronRight, ShieldCheck,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser } from '../lib/demoAuth.js';
@@ -57,10 +57,11 @@ export default function GuideProfileCalendarPage() {
       const res = await authFetch('/api/guides/explore?pageSize=48');
       if (!res.ok) throw new Error('Failed to load profile');
       const data = await res.json();
-      const guide = (data.guides || []).find(g => g.UserID === storedUser?.Id);
+      const guide = (data.guides || []).find(g => Number(g.UserID) === Number(storedUser?.Id ?? storedUser?.id));
       if (guide) {
         setProfile(guide);
         setForm({
+          avatarUrl: guide.AvatarUrl || storedUser?.AvatarUrl || '',
           bio: guide.Bio || '',
           city: guide.City || '',
           specialties: guide.Specialties || '',
@@ -80,6 +81,7 @@ export default function GuideProfileCalendarPage() {
           TotalReviews: storedUser?.TotalReviews || 0,
         });
         setForm({
+          avatarUrl: storedUser?.AvatarUrl || '',
           bio: storedUser?.Bio || '',
           city: storedUser?.City || '',
           specialties: storedUser?.Specialties || '',
@@ -97,6 +99,7 @@ export default function GuideProfileCalendarPage() {
           Rating: storedUser.Rating || 0, TotalReviews: storedUser.TotalReviews || 0,
         });
         setForm({
+          avatarUrl: storedUser.AvatarUrl || '',
           bio: storedUser.Bio || '', city: storedUser.City || '',
           specialties: storedUser.Specialties || '', languages: storedUser.Languages || '',
           hourlyRate: storedUser.HourlyRate || '', dailyRate: storedUser.DailyRate || storedUser.RatePerDay || '',
@@ -116,6 +119,7 @@ export default function GuideProfileCalendarPage() {
       const res = await authFetch('/api/guides/profile', {
         method: 'PUT',
         body: JSON.stringify({
+          avatarUrl: form.avatarUrl,
           bio: form.bio,
           city: form.city,
           specialties: form.specialties,
@@ -130,6 +134,7 @@ export default function GuideProfileCalendarPage() {
       }
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to update');
+      sessionStorage.setItem('wg_user', JSON.stringify({ ...storedUser, AvatarUrl: form.avatarUrl || null }));
       setEditing(false);
       await fetchProfile();
       addToast('Profile updated!', 'success');
@@ -143,6 +148,8 @@ export default function GuideProfileCalendarPage() {
   const name = storedUser?.FullName || storedUser?.fullName || 'Guide';
   const email = storedUser?.Email || storedUser?.email || '';
   const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  const profileFields = [profile?.AvatarUrl || storedUser?.AvatarUrl, profile?.Bio, profile?.City, profile?.Specialties, profile?.Languages, profile?.DailyRate || profile?.RatePerDay];
+  const profileCompletion = Math.round(profileFields.filter(Boolean).length / profileFields.length * 100);
 
   return (
     <div>
@@ -186,7 +193,10 @@ export default function GuideProfileCalendarPage() {
           {/* Profile Edit Card */}
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-white">Profile Details</h3>
+              <div>
+                <h3 className="text-sm font-bold text-white">Profile Details</h3>
+                <p className="mt-1 text-xs text-slate-500">Public listing completeness: {profileCompletion}%</p>
+              </div>
               {!editing ? (
                 <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/15 transition-colors">
                   <Edit3 className="h-3.5 w-3.5" /> Edit
@@ -200,6 +210,12 @@ export default function GuideProfileCalendarPage() {
 
             {editing ? (
               <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">Profile photo URL</label>
+                  <input type="url" value={form.avatarUrl || ''} onChange={e => setForm(f => ({ ...f, avatarUrl: e.target.value }))} placeholder="https://example.com/photo.jpg"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400" />
+                  <p className="mt-1 text-xs text-slate-500">Paste a public image URL. Leave blank to use your initials.</p>
+                </div>
                 <div>
                   <label className="mb-1 block text-xs text-slate-400">Bio</label>
                   <textarea rows={3} value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
@@ -237,6 +253,7 @@ export default function GuideProfileCalendarPage() {
               </div>
             ) : (
               <div className="space-y-2.5">
+                <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-teal-400 transition-all" style={{ width: `${profileCompletion}%` }} /></div>
                 {profile?.Bio && <p className="text-sm text-slate-300">{profile.Bio}</p>}
                 {profile?.City && (
                   <div className="flex items-center gap-2 text-sm"><MapPin className="h-3.5 w-3.5 text-brand-400" /><span className="text-slate-300">{profile.City}</span></div>
@@ -259,13 +276,207 @@ export default function GuideProfileCalendarPage() {
                     <div className="flex items-center gap-1 text-sm"><DollarSign className="h-3.5 w-3.5 text-emerald-400" /><span className="font-bold text-white">৳{profile.DailyRate || profile.RatePerDay}</span><span className="text-xs text-slate-500">/day</span></div>
                   )}
                 </div>
+                {profileCompletion < 100 && <p className="pt-2 text-xs text-slate-500">Add a photo, bio, city, specialties, languages, and daily rate so tourists know what to expect. Select Edit to complete your listing.</p>}
               </div>
             )}
           </div>
+          <VerificationPanel />
+          <AvailabilityCalendar />
         </div>
       )}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
+  );
+}
+
+function VerificationPanel() {
+  const [request, setRequest] = useState(null);
+  const [verified, setVerified] = useState(false);
+  const [requestNote, setRequestNote] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/guide-verifications/me');
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not load verification status');
+      setRequest(data.request || null);
+      setVerified(Boolean(data.isVerified));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setSubmitting(true); setError(''); setNotice('');
+    try {
+      const res = await authFetch('/api/guide-verifications', { method: 'POST', body: JSON.stringify({ requestNote }) });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not submit verification request');
+      setRequest(data.request); setRequestNote(''); setNotice('Your verification request was sent to the admin team.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl sm:p-6">
+      <h3 className="mb-2 flex items-center gap-2 font-bold text-white"><ShieldCheck className="h-4 w-4 text-brand-400" />Identity verification</h3>
+      {loading ? <p className="text-sm text-slate-400">Loading verification status…</p> : verified ? (
+        <p className="text-sm text-emerald-300">Your guide profile is verified and displays a verification badge to tourists.</p>
+      ) : request?.Status === 'pending' ? (
+        <div className="space-y-2 text-sm"><p className="text-amber-300">Your request is awaiting review.</p><p className="text-slate-400">{request.RequestNote}</p></div>
+      ) : (
+        <form onSubmit={submit} className="space-y-3">
+          <p className="text-sm text-slate-400">Request a manual identity review. Do not include identity numbers or upload private documents in this note.</p>
+          {request?.Status === 'rejected' && <p className="rounded-lg bg-rose-500/10 p-3 text-sm text-rose-300">Previous request: {request.AdminNote || 'Please contact support for details.'}</p>}
+          {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
+          {notice && <p role="status" className="text-sm text-emerald-300">{notice}</p>}
+          <textarea value={requestNote} onChange={(event) => setRequestNote(event.target.value)} required minLength={20} maxLength={2000} rows={3} placeholder="Tell the admin team how they can verify your guide identity."
+            className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400" />
+          <button type="submit" disabled={submitting} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{submitting ? 'Sending…' : 'Request verification'}</button>
+        </form>
+      )}
+      {!loading && request?.Status === 'pending' && error && <p role="alert" className="mt-2 text-sm text-rose-300">{error}</p>}
+    </section>
+  );
+}
+
+function dateKey(value) {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+}
+
+function AvailabilityCalendar() {
+  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [blockedDates, setBlockedDates] = useState(new Set());
+  const [bookedDates, setBookedDates] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [savingDate, setSavingDate] = useState('');
+  const [error, setError] = useState('');
+
+  const loadCalendar = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [availabilityRes, bookingsRes] = await Promise.all([
+        authFetch('/api/guide-availability'),
+        authFetch('/api/bookings'),
+      ]);
+      const availability = await availabilityRes.json();
+      const bookingsData = await bookingsRes.json();
+      if (!availabilityRes.ok || !availability.ok) throw new Error(availability.message || 'Could not load availability');
+      if (!bookingsRes.ok || !bookingsData.ok) throw new Error(bookingsData.message || 'Could not load bookings');
+
+      setBlockedDates(new Set((availability.blockedDates || []).map((item) => dateKey(item.BlockedDate)).filter(Boolean)));
+      const booked = new Set();
+      for (const booking of bookingsData.bookings || []) {
+        if (!['pending', 'confirmed'].includes(String(booking.Status).toLowerCase())) continue;
+        const start = new Date(`${dateKey(booking.StartDate)}T00:00:00`);
+        const end = new Date(`${dateKey(booking.EndDate)}T00:00:00`);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+        for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+          booked.add(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`);
+        }
+      }
+      setBookedDates(booked);
+    } catch (err) {
+      setError(err.message || 'Could not load availability');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadCalendar(); }, [loadCalendar]);
+
+  const toggleDate = async (key) => {
+    if (!key || bookedDates.has(key) || savingDate) return;
+    setSavingDate(key);
+    setError('');
+    try {
+      const isBlocked = blockedDates.has(key);
+      const res = isBlocked
+        ? await authFetch(`/api/guide-availability/unblock/${key}`, { method: 'DELETE' })
+        : await authFetch('/api/guide-availability/block', {
+            method: 'POST',
+            body: JSON.stringify({ dates: [key], reason: 'Unavailable' }),
+          });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not update this date');
+      setBlockedDates((current) => {
+        const next = new Set(current);
+        if (isBlocked) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    } catch (err) {
+      setError(err.message || 'Could not update this date');
+    } finally {
+      setSavingDate('');
+    }
+  };
+
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstWeekday = new Date(year, monthIndex, 1).getDay();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const cells = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, index) => index + 1)];
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 font-bold text-white"><CalendarDays className="h-4 w-4 text-brand-400" />Availability calendar</h3>
+          <p className="mt-1 text-xs text-slate-400">Select an open date to block it. Select a blocked date to make it available again.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setMonth(new Date(year, monthIndex - 1, 1))} aria-label="Previous month" className="rounded-lg bg-white/10 p-2 text-slate-300 hover:bg-white/15"><ChevronLeft className="h-4 w-4" /></button>
+          <span className="min-w-32 text-center text-sm font-semibold text-white">{month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+          <button onClick={() => setMonth(new Date(year, monthIndex + 1, 1))} aria-label="Next month" className="rounded-lg bg-white/10 p-2 text-slate-300 hover:bg-white/15"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+      </div>
+
+      {error && <p role="alert" className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-brand-400" /></div> : (
+        <>
+          <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <span key={day} className="py-2">{day}</span>)}
+            {cells.map((day, index) => {
+              if (!day) return <span key={`empty-${index}`} />;
+              const date = new Date(year, monthIndex, day);
+              const key = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const isBooked = bookedDates.has(key);
+              const isBlocked = blockedDates.has(key);
+              const isPast = date < today;
+              return (
+                <button key={key} disabled={isBooked || (isPast && !isBlocked) || savingDate === key} onClick={() => toggleDate(key)} title={isBooked ? 'A pending or confirmed booking exists' : isBlocked ? 'Click to make available' : isPast ? 'Past date' : 'Click to block this date'}
+                  className={`relative min-h-10 rounded-lg text-sm transition-colors disabled:cursor-not-allowed ${isBooked ? 'bg-sky-500/20 text-sky-300' : isBlocked ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30' : isPast ? 'text-slate-700' : 'text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-300'}`}>
+                  {day}{savingDate === key && <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-ink-900/80"><Loader2 className="h-4 w-4 animate-spin" /></span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-400">
+            <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded bg-emerald-400/50" />Available</span>
+            <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded bg-rose-400/60" />Blocked by you</span>
+            <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded bg-sky-400/60" />Booking request or confirmed</span>
+          </div>
+        </>
+      )}
+    </section>
   );
 }

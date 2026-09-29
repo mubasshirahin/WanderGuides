@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Edit, Trash2, MapPin, Star, Languages, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, MapPin, Star, Languages, Loader2, ShieldCheck } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
 
@@ -24,26 +24,39 @@ export default function GuidesPage({ role }) {
   const [cityFilter, setCityFilter] = useState('');
   const [cities, setCities] = useState([]);
 
-  const fetchGuides = async () => {
+  const fetchGuides = async (signal) => {
     setLoading(true);
+    setError(null);
     try {
-      const params = new URLSearchParams();
-      if (cityFilter) params.set('city', cityFilter);
-      const res = await fetch(`${API}?${params.toString()}`);
+      const res = await fetch(API, { signal });
       const data = await res.json();
-      if (!data.ok) throw new Error(data.message || 'Failed to load');
-      setGuides(data.guides);
+      if (!res.ok) throw new Error(data.message || 'Failed to load guides');
+
+      // The list endpoint returns { data, total, page, ... } while some older
+      // API responses use { ok, guides }. Accept both response formats.
+      const guideList = Array.isArray(data.data)
+        ? data.data
+        : Array.isArray(data.guides)
+          ? data.guides
+          : null;
+      if (!guideList) throw new Error(data.message || 'Unexpected response from the server');
+
+      setGuides(guideList);
       // collect unique cities
-      const unique = [...new Set(data.guides.map(g => g.City).filter(Boolean))].sort();
+      const unique = [...new Set(guideList.map(g => g.City).filter(Boolean))].sort();
       setCities(unique);
     } catch (e) {
-      setError(e.message);
+      if (e.name !== 'AbortError') setError(e.message || 'Failed to load guides');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
-  useEffect(() => { fetchGuides(); }, [cityFilter]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchGuides(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this guide?')) return;
@@ -57,9 +70,12 @@ export default function GuidesPage({ role }) {
     }
   };
 
-  const filtered = guides.filter(g =>
-    (g.FullName + ' ' + g.City + ' ' + (g.Specialties || '')).toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = guides.filter(g => {
+    const matchesSearch = `${g.FullName || ''} ${g.City || ''} ${g.Specialties || ''}`
+      .toLowerCase()
+      .includes(search.toLowerCase());
+    return matchesSearch && (!cityFilter || g.City === cityFilter);
+  });
 
   return (
     <div>
@@ -135,14 +151,14 @@ export default function GuidesPage({ role }) {
                 {filtered.map(g => (
                   <tr key={g.Id} className="hover:bg-white/[0.03] transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-white">{g.FullName}</div>
+                      <div className="flex items-center gap-2 font-medium text-white">{g.FullName}{g.IsVerified && <span title="Identity verified" className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300"><ShieldCheck className="h-3 w-3" />Verified</span>}</div>
                       <div className="text-xs text-slate-400">{g.Email}</div>
                     </td>
                     <td className="px-4 py-3 flex items-center gap-1.5 text-slate-300">
                       <MapPin className="h-3.5 w-3.5 text-brand-400" />
                       {g.City}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-white">৳ {Number(g.RatePerDay).toFixed(2)}</td>
+                    <td className="px-4 py-3 font-semibold text-white">৳ {Number(g.DailyRate ?? g.RatePerDay ?? 0).toFixed(2)}</td>
                     <td className="px-4 py-3 flex items-center gap-1 text-slate-300">
                       <Star className="h-3.5 w-3.5 fill-accent-400 text-accent-400" />
                       {Number(g.Rating || 0).toFixed(1)}

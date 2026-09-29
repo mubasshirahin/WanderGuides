@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createTour,
+  updateTour,
   getMyTours,
   getTourResponses,
   toggleTour,
@@ -17,6 +18,7 @@ const router = Router();
 
 router.get('/dashboard', auth, requireRole('guide'), asyncHandler(getGuideDashboard));
 router.post('/tours', auth, requireRole('guide'), asyncHandler(createTour));
+router.put('/tours/:tourId', auth, requireRole('guide'), asyncHandler(updateTour));
 router.get('/my-tours', auth, requireRole('guide'), asyncHandler(getMyTours));
 router.get('/tours/:tourId/responses', auth, requireRole('guide'), asyncHandler(getTourResponses));
 router.put('/tours/:tourId/toggle', auth, requireRole('guide'), asyncHandler(toggleTour));

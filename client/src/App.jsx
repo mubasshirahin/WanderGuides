@@ -12,6 +12,7 @@ import TouristDashboard from './pages/TouristDashboard.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import TouristProfilePage from './pages/TouristProfilePage.jsx';
 import ExplorePage from './pages/ExplorePage.jsx';
+import BrowseToursPage from './pages/BrowseToursPage.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
 import CustomTourPage from './pages/CustomTourPage.jsx';
 import ReviewsPage from './pages/ReviewsPage.jsx';
@@ -19,6 +20,7 @@ import GuideDashboardPage from './pages/GuideDashboardPage.jsx';
 import MyToursAndBookingsPage from './pages/MyToursAndBookingsPage.jsx';
 import GuideCustomRequestsPage from './pages/GuideCustomRequestsPage.jsx';
 import GuideProfileCalendarPage from './pages/GuideProfileCalendarPage.jsx';
+import GuideVerificationPage from './pages/GuideVerificationPage.jsx';
 import ProtectedLayout from './components/ProtectedLayout.jsx';
 import { login, register, googleLogin, logout, getStoredUser, fetchCurrentUser } from './lib/demoAuth.js';
 
@@ -114,6 +116,7 @@ export default function App({ googleEnabled = false }) {
             <Route path="guides" element={<GuidesPage role={role} />} />
             {role === 'admin' && <Route path="guides/new" element={<GuideFormPage />} />}
             {role === 'admin' && <Route path="guides/:id/edit" element={<GuideFormPage />} />}
+            {role === 'admin' && <Route path="guide-verifications" element={<GuideVerificationPage />} />}
             <Route path="bookings" element={<BookingsPage role={role} />} />
             <Route path="dashboard" element={
               role === 'tourist' ? <TouristDashboard /> :
@@ -124,6 +127,7 @@ export default function App({ googleEnabled = false }) {
             <Route path="custom-requests" element={role === 'guide' ? <GuideCustomRequestsPage /> : <CustomTourPage role={role} />} />
             <Route path="availability" element={role === 'guide' ? <GuideProfileCalendarPage /> : <ProfilePage role={role} />} />
             <Route path="explore" element={<ExplorePage role={role} />} />
+            <Route path="browse-tours" element={<BrowseToursPage role={role} />} />
             <Route path="messages" element={<MessagesPage role={role} />} />
             <Route path="custom-tour" element={<CustomTourPage role={role} />} />
             <Route path="reviews" element={<ReviewsPage role={role} />} />

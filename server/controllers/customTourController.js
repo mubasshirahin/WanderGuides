@@ -1,6 +1,7 @@
 import { query, getPool } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import { getIO } from '../utils/socket.js';
+import { notifyGuide } from '../utils/guideNotifications.js';
 
 /**
  * POST /api/custom-tours
@@ -33,6 +34,19 @@ export async function createRequest(req, res) {
     io.to('guides').emit('custom_tour:new', { request });
   } catch (_) { /* socket not critical */ }
 
+  try {
+    const guideRows = await query('SELECT UserID FROM Guides WHERE IsActive = 1 AND UserID IS NOT NULL');
+    await Promise.all(guideRows.map(({ UserID }) => notifyGuide({
+      guideId: UserID,
+      type: 'custom_request',
+      title: 'New custom tour request',
+      body: `${request.Title} in ${request.Destination} · budget ৳${Number(request.Budget).toFixed(0)}`,
+      linkUrl: '/custom-requests',
+    })));
+  } catch (notificationError) {
+    console.error('[createRequest] Could not notify guides:', notificationError.message);
+  }
+
   res.status(201).json({ ok: true, request });
 }
 
@@ -42,6 +56,26 @@ export async function createRequest(req, res) {
  */
 export async function getOpenRequests(req, res) {
   const { destination, minBudget, maxBudget } = req.query || {};
+  const page = Number(req.query?.page ?? 1);
+  const pageSize = Number(req.query?.pageSize ?? 12);
+  const parsedMinBudget = minBudget === undefined || minBudget === '' ? null : Number(minBudget);
+  const parsedMaxBudget = maxBudget === undefined || maxBudget === '' ? null : Number(maxBudget);
+
+  if (!Number.isSafeInteger(page) || page < 1 || page > 1000000) {
+    throw new AppError('page must be a positive integer', 400);
+  }
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new AppError('pageSize must be between 1 and 100', 400);
+  }
+  if (parsedMinBudget !== null && (!Number.isFinite(parsedMinBudget) || parsedMinBudget < 0)) {
+    throw new AppError('minBudget must be a non-negative number', 400);
+  }
+  if (parsedMaxBudget !== null && (!Number.isFinite(parsedMaxBudget) || parsedMaxBudget < 0)) {
+    throw new AppError('maxBudget must be a non-negative number', 400);
+  }
+  if (parsedMinBudget !== null && parsedMaxBudget !== null && parsedMinBudget > parsedMaxBudget) {
+    throw new AppError('minBudget cannot exceed maxBudget', 400);
+  }
 
   let sql = `
     SELECT
@@ -60,19 +94,23 @@ export async function getOpenRequests(req, res) {
     sql += ` AND ctr.Destination LIKE @destination`;
     params.destination = `%${destination}%`;
   }
-  if (minBudget) {
+  if (parsedMinBudget !== null) {
     sql += ` AND ctr.Budget >= @minBudget`;
-    params.minBudget = Number(minBudget);
+    params.minBudget = parsedMinBudget;
   }
-  if (maxBudget) {
+  if (parsedMaxBudget !== null) {
     sql += ` AND ctr.Budget <= @maxBudget`;
-    params.maxBudget = Number(maxBudget);
+    params.maxBudget = parsedMaxBudget;
   }
 
-  sql += ` ORDER BY ctr.CreatedAt DESC`;
+  const countSql = `SELECT COUNT(*) AS total FROM CustomTourRequests ctr WHERE ctr.Status = 'open'${destination ? ' AND ctr.Destination LIKE @destination' : ''}${parsedMinBudget !== null ? ' AND ctr.Budget >= @minBudget' : ''}${parsedMaxBudget !== null ? ' AND ctr.Budget <= @maxBudget' : ''}`;
+  params.offset = (page - 1) * pageSize;
+  params.pageSize = pageSize;
+  sql += ` ORDER BY ctr.CreatedAt DESC, ctr.RequestID DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`;
 
-  const requests = await query(sql, params);
-  res.json({ ok: true, requests });
+  const [requests, countRows] = await Promise.all([query(sql, params), query(countSql, params)]);
+  const total = Number(countRows[0]?.total || 0);
+  res.json({ ok: true, requests, page, pageSize, total, totalPages: Math.ceil(total / pageSize) });
 }
 
 /**
@@ -130,7 +168,7 @@ export async function getRequestWithBids(req, res) {
        g.City AS GuideCity, g.Specialties AS GuideSpecialties
      FROM TourBids tb
      INNER JOIN Users u ON u.Id = tb.GuideID
-     LEFT JOIN Guides g ON g.Id = tb.GuideID
+     LEFT JOIN Guides g ON g.UserID = tb.GuideID
      WHERE tb.RequestID = @requestId
      ORDER BY tb.CreatedAt DESC`,
     { requestId }
@@ -215,63 +253,77 @@ export async function acceptBid(req, res) {
     throw new AppError('Invalid bid ID', 400);
   }
 
-  // Fetch the bid along with the associated request (verify ownership)
-  const bidRows = await query(
-    `SELECT
-       tb.BidID, tb.RequestID, tb.GuideID, tb.OfferedPrice, tb.Status AS BidStatus,
-       ctr.TouristID, ctr.StartDate, ctr.EndDate, ctr.Status AS RequestStatus, ctr.Title
-     FROM TourBids tb
-     INNER JOIN CustomTourRequests ctr ON ctr.RequestID = tb.RequestID
-     WHERE tb.BidID = @bidId`,
-    { bidId }
-  );
-
-  if (!bidRows.length) throw new AppError('Bid not found', 404);
-
-  const bid = bidRows[0];
-
-  if (bid.TouristID !== touristId) throw new AppError('You can only accept bids on your own requests', 403);
-  if (bid.RequestStatus !== 'open') throw new AppError('This tour request is no longer open', 400);
-  if (bid.BidStatus !== 'pending') throw new AppError('This bid has already been processed', 400);
-
-  // Use a transaction for atomicity
   const pool = await getPool();
   const transaction = pool.transaction();
+  let bid;
+  let booking;
 
   try {
     await transaction.begin();
 
-    // 1. Accept the bid
-    await transaction.request()
+    // Lock both records before checking state so accept/cancel requests serialize.
+    const bidResult = await transaction.request()
       .input('bidId', bidId)
-      .query(`UPDATE TourBids SET Status = 'accepted' WHERE BidID = @bidId`);
+      .query(
+        `SELECT tb.BidID, tb.RequestID, tb.GuideID, tb.OfferedPrice,
+                tb.Status AS BidStatus, ctr.TouristID, ctr.StartDate, ctr.EndDate,
+                ctr.Status AS RequestStatus, ctr.Title
+         FROM TourBids tb WITH (UPDLOCK, HOLDLOCK)
+         INNER JOIN CustomTourRequests ctr WITH (UPDLOCK, HOLDLOCK)
+           ON ctr.RequestID = tb.RequestID
+         WHERE tb.BidID = @bidId`
+      );
+    bid = bidResult.recordset[0];
+    if (!bid) throw new AppError('Bid not found', 404);
+    if (Number(bid.TouristID) !== Number(touristId)) {
+      throw new AppError('You can only accept bids on your own requests', 403);
+    }
+    if (String(bid.RequestStatus).toLowerCase() !== 'open') {
+      throw new AppError('This tour request is no longer open', 400);
+    }
+    if (String(bid.BidStatus).toLowerCase() !== 'pending') {
+      throw new AppError('This bid has already been processed', 400);
+    }
 
-    // 2. Reject all other bids on the same request
+    // Conditional state changes are checked inside the same transaction.
+    const requestUpdate = await transaction.request()
+      .input('requestId', bid.RequestID)
+      .query(`UPDATE CustomTourRequests SET Status = 'fulfilled'
+              WHERE RequestID = @requestId AND Status = 'open'`);
+    if (requestUpdate.rowsAffected[0] !== 1) {
+      throw new AppError('This tour request is no longer open', 409);
+    }
+
+    const bidUpdate = await transaction.request()
+      .input('bidId', bidId)
+      .query(`UPDATE TourBids SET Status = 'accepted'
+              WHERE BidID = @bidId AND Status = 'pending'`);
+    if (bidUpdate.rowsAffected[0] !== 1) {
+      throw new AppError('This bid has already been processed', 409);
+    }
+
+    // Reject the other offers before creating the single confirmed booking.
     await transaction.request()
       .input('requestId', bid.RequestID)
       .input('bidId', bidId)
       .query(`UPDATE TourBids SET Status = 'rejected' WHERE RequestID = @requestId AND BidID != @bidId AND Status = 'pending'`);
 
-    // 3. Update request status to fulfilled
-    await transaction.request()
-      .input('requestId', bid.RequestID)
-      .query(`UPDATE CustomTourRequests SET Status = 'fulfilled' WHERE RequestID = @requestId`);
-
-    // 4. Create a booking
+    // Create a booking only after this transaction has claimed the open request.
     const bookingResult = await transaction.request()
       .input('touristId', touristId)
       .input('guideId', bid.GuideID)
       .input('startDate', bid.StartDate)
       .input('endDate', bid.EndDate)
       .input('totalAmount', bid.OfferedPrice)
+      .input('notes', `Accepted from custom tour: ${bid.Title}`)
       .query(
         `INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes)
          OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate,
                 INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes, INSERTED.CreatedAt
-         VALUES (@touristId, @guideId, @startDate, @endDate, 'confirmed', @totalAmount, @notes)`,
-        { touristId, guideId: bid.GuideID, startDate: bid.StartDate, endDate: bid.EndDate, totalAmount: bid.OfferedPrice, notes: `Accepted from custom tour: ${bid.Title}` }
+         VALUES (@touristId, @guideId, @startDate, @endDate, 'confirmed', @totalAmount, @notes)`
       );
 
+    booking = bookingResult.recordset[0];
     await transaction.commit();
 
     // Emit real-time notification to the accepted guide
@@ -300,10 +352,11 @@ export async function acceptBid(req, res) {
     res.json({
       ok: true,
       message: 'Bid accepted and booking created',
-      booking: bookingResult.recordset[0],
+      booking,
     });
   } catch (err) {
-    await transaction.rollback();
+    await transaction.rollback().catch(() => {});
+    if (err instanceof AppError) throw err;
     console.error('[acceptBid]', err);
     throw new AppError('Failed to accept bid', 500);
   }
@@ -395,9 +448,13 @@ export async function cancelRequest(req, res) {
     await transaction.begin();
 
     // 1. Update request status to cancelled
-    await transaction.request()
+    const cancelUpdate = await transaction.request()
       .input('requestId', requestId)
-      .query(`UPDATE CustomTourRequests SET Status = 'cancelled' WHERE RequestID = @requestId`);
+      .query(`UPDATE CustomTourRequests SET Status = 'cancelled'
+              WHERE RequestID = @requestId AND Status = 'open'`);
+    if (cancelUpdate.rowsAffected[0] !== 1) {
+      throw new AppError('This tour request has already been processed', 409);
+    }
 
     // 2. Reject all pending bids
     const rejectedResult = await transaction.request()
@@ -423,7 +480,8 @@ export async function cancelRequest(req, res) {
 
     res.json({ ok: true, message: 'Request cancelled' });
   } catch (err) {
-    await transaction.rollback();
+    await transaction.rollback().catch(() => {});
+    if (err instanceof AppError) throw err;
     console.error('[cancelRequest]', err);
     throw new AppError('Failed to cancel request', 500);
   }

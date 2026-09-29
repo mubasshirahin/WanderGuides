@@ -33,11 +33,16 @@ const validDateString = (label) =>
   );
 
 export const bookingSchema = z.object({
-  guideId: z.coerce.number().int('guideId must be an integer').positive('guideId must be a positive number'),
+  guideId: z.coerce.number().int('guideId must be an integer').positive('guideId must be a positive number').optional(),
+  tourId: z.coerce.number().int('tourId must be an integer').positive('tourId must be a positive number').optional(),
+  groupSize: z.coerce.number().int().min(1).max(50).default(1),
   startDate: validDateString('startDate'),
   endDate: validDateString('endDate'),
   notes: optionalTrimmedString(500),
-}).strict();
+}).strict().refine((booking) => booking.guideId || booking.tourId, {
+  message: 'guideId or tourId is required',
+  path: ['guideId'],
+});
 
 export const profileUpdateSchema = z.object({
   fullName: z.string().trim().min(1).max(100).optional(),
@@ -89,6 +94,7 @@ export const exploreQuerySchema = z.object({
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
   minRating: z.coerce.number().min(0).max(5).optional(),
+  sort: z.enum(['rating', 'price_asc', 'price_desc', 'reviews', 'newest']).default('rating'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(48).default(12),
 });
@@ -113,6 +119,9 @@ export const guideBidSchema = z.object({
 }).strict();
 
 export const guideSelfProfileSchema = z.object({
+  avatarUrl: optionalTrimmedString(1000).refine((value) => !value || /^https?:\/\//i.test(value), {
+    message: 'avatarUrl must be a public http(s) URL',
+  }),
   bio: optionalTrimmedString(2000),
   city: optionalTrimmedString(100),
   specialties: optionalTrimmedString(255),
