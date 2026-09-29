@@ -74,11 +74,14 @@ export function initSocket(server) {
         const receiverId = convo.TouristID === senderId ? convo.GuideID : convo.TouristID;
 
         const now = new Date();
+        // NOTE: Messages-te AFTER INSERT trigger ache, tai OUTPUT ... INTO @table pattern.
         const insertResult = await query(
-          `INSERT INTO Messages (ConversationID, SenderID, ReceiverID, MessageText)
+          `DECLARE @newMsg TABLE (MessageID INT, ConversationID INT, SenderID INT, ReceiverID INT, MessageText NVARCHAR(MAX), IsRead BIT, CreatedAt DATETIME2);
+           INSERT INTO Messages (ConversationID, SenderID, ReceiverID, MessageText)
            OUTPUT INSERTED.MessageID, INSERTED.ConversationID, INSERTED.SenderID, INSERTED.ReceiverID,
-                  INSERTED.MessageText, INSERTED.IsRead, INSERTED.CreatedAt
-           VALUES (@conversationId, @senderId, @receiverId, @messageText)`,
+                  INSERTED.MessageText, INSERTED.IsRead, INSERTED.CreatedAt INTO @newMsg
+           VALUES (@conversationId, @senderId, @receiverId, @messageText);
+           SELECT MessageID, ConversationID, SenderID, ReceiverID, MessageText, IsRead, CreatedAt FROM @newMsg;`,
           { conversationId, senderId, receiverId, messageText: String(messageText).trim() }
         );
 

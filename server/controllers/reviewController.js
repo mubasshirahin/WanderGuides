@@ -60,10 +60,13 @@ export function createCreateReview(getPoolFn = getPool) {
     insertRequest.input('rating', ratingNum);
     insertRequest.input('comment', comment || null);
     const insertResult = await insertRequest.query(
-      `INSERT INTO Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
+      // NOTE: Reviews-te AFTER INSERT trigger ache, tai OUTPUT ... INTO @table pattern.
+      `DECLARE @newReview TABLE (Id INT, BookingId INT, TouristUserId INT, GuideId INT, Rating TINYINT, Comment NVARCHAR(MAX), CreatedAt DATETIME2);
+       INSERT INTO Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
        OUTPUT INSERTED.Id, INSERTED.BookingId, INSERTED.TouristUserId,
-              INSERTED.GuideId, INSERTED.Rating, INSERTED.Comment, INSERTED.CreatedAt
-       VALUES (@bookingId, @touristId, @guideId, @rating, @comment)`
+              INSERTED.GuideId, INSERTED.Rating, INSERTED.Comment, INSERTED.CreatedAt INTO @newReview
+       VALUES (@bookingId, @touristId, @guideId, @rating, @comment);
+       SELECT Id, BookingId, TouristUserId, GuideId, Rating, Comment, CreatedAt FROM @newReview;`
     );
 
     const ratingRequest = transaction.request();
