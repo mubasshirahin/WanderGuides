@@ -3,6 +3,7 @@ import AppError from '../utils/AppError.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import { getJwtSecret } from '../utils/jwtSecret.js';
 
 dotenv.config();
 
@@ -71,8 +72,7 @@ export const register = async (req, res) => {
     }
 
     const payload = { id: user.Id, email: user.Email, role: user.Role };
-    const secret = process.env.JWT_SECRET || 'dev-secret';
-    const token = jwt.sign(payload, secret, { expiresIn: '7d' });
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 
     res.status(201).json({ ok: true, token, user });
   } catch (err) {
@@ -123,8 +123,7 @@ export const login = async (req, res) => {
     }
 
     const payload = { id: user.Id, email: user.Email, role: user.Role };
-    const secret = process.env.JWT_SECRET || 'dev-secret';
-    const token = jwt.sign(payload, secret, { expiresIn: '7d' });
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
     return res.json({ ok: true, token, user });
   }
 
@@ -151,8 +150,7 @@ export const login = async (req, res) => {
   if (!match) throw new AppError('Invalid credentials', 401);
 
   const payload = { id: user.Id, email: user.Email, role: user.Role };
-  const secret = process.env.JWT_SECRET || 'dev-secret';
-  const token = jwt.sign(payload, secret, { expiresIn: '7d' });
+  const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 
   delete user.PasswordHash;
   res.json({ ok: true, token, user });
@@ -276,8 +274,7 @@ export const googleAuth = async (req, res) => {
     }
 
     const jwtPayload = { id: user.Id, email: user.Email, role: user.Role };
-    const secret = process.env.JWT_SECRET || 'dev-secret';
-    const token = jwt.sign(jwtPayload, secret, { expiresIn: '7d' });
+    const token = jwt.sign(jwtPayload, getJwtSecret(), { expiresIn: '7d' });
 
     res.json({ ok: true, token, user });
   } catch (err) {

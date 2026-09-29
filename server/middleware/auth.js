@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import AppError from '../utils/AppError.js';
+import { getJwtSecret } from '../utils/jwtSecret.js';
 
 dotenv.config();
 
@@ -12,7 +13,7 @@ export default function auth(req, _res, next) {
 
   const token = header.split(' ')[1];
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+    const payload = jwt.verify(token, getJwtSecret());
     req.user = payload;
     return next();
   } catch (err) {

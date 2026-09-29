@@ -2,13 +2,14 @@ import jwt from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { query, getPool } from '../config/db.js';
 import AppError from '../utils/AppError.js';
+import { getJwtSecret } from './jwtSecret.js';
 
 let ioInstance = null;
 
 export function initSocket(server) {
   ioInstance = new Server(server, {
     cors: {
-      origin: '*',
+      origin: (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map((origin) => origin.trim()),
       methods: ['GET', 'POST'],
     },
   });
@@ -24,7 +25,7 @@ export function initSocket(server) {
       }
 
       try {
-        const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+        const payload = jwt.verify(token, getJwtSecret());
         authenticatedUserId = payload && payload.id ? Number(payload.id) : null;
         if (!authenticatedUserId) {
           socket.disconnect(true);
