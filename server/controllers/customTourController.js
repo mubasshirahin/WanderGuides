@@ -56,6 +56,26 @@ export async function createRequest(req, res) {
  */
 export async function getOpenRequests(req, res) {
   const { destination, minBudget, maxBudget } = req.query || {};
+  const page = Number(req.query?.page ?? 1);
+  const pageSize = Number(req.query?.pageSize ?? 12);
+  const parsedMinBudget = minBudget === undefined || minBudget === '' ? null : Number(minBudget);
+  const parsedMaxBudget = maxBudget === undefined || maxBudget === '' ? null : Number(maxBudget);
+
+  if (!Number.isSafeInteger(page) || page < 1 || page > 1000000) {
+    throw new AppError('page must be a positive integer', 400);
+  }
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new AppError('pageSize must be between 1 and 100', 400);
+  }
+  if (parsedMinBudget !== null && (!Number.isFinite(parsedMinBudget) || parsedMinBudget < 0)) {
+    throw new AppError('minBudget must be a non-negative number', 400);
+  }
+  if (parsedMaxBudget !== null && (!Number.isFinite(parsedMaxBudget) || parsedMaxBudget < 0)) {
+    throw new AppError('maxBudget must be a non-negative number', 400);
+  }
+  if (parsedMinBudget !== null && parsedMaxBudget !== null && parsedMinBudget > parsedMaxBudget) {
+    throw new AppError('minBudget cannot exceed maxBudget', 400);
+  }
 
   let sql = `
     SELECT
@@ -74,19 +94,23 @@ export async function getOpenRequests(req, res) {
     sql += ` AND ctr.Destination LIKE @destination`;
     params.destination = `%${destination}%`;
   }
-  if (minBudget) {
+  if (parsedMinBudget !== null) {
     sql += ` AND ctr.Budget >= @minBudget`;
-    params.minBudget = Number(minBudget);
+    params.minBudget = parsedMinBudget;
   }
-  if (maxBudget) {
+  if (parsedMaxBudget !== null) {
     sql += ` AND ctr.Budget <= @maxBudget`;
-    params.maxBudget = Number(maxBudget);
+    params.maxBudget = parsedMaxBudget;
   }
 
-  sql += ` ORDER BY ctr.CreatedAt DESC`;
+  const countSql = `SELECT COUNT(*) AS total FROM CustomTourRequests ctr WHERE ctr.Status = 'open'${destination ? ' AND ctr.Destination LIKE @destination' : ''}${parsedMinBudget !== null ? ' AND ctr.Budget >= @minBudget' : ''}${parsedMaxBudget !== null ? ' AND ctr.Budget <= @maxBudget' : ''}`;
+  params.offset = (page - 1) * pageSize;
+  params.pageSize = pageSize;
+  sql += ` ORDER BY ctr.CreatedAt DESC, ctr.RequestID DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`;
 
-  const requests = await query(sql, params);
-  res.json({ ok: true, requests });
+  const [requests, countRows] = await Promise.all([query(sql, params), query(countSql, params)]);
+  const total = Number(countRows[0]?.total || 0);
+  res.json({ ok: true, requests, page, pageSize, total, totalPages: Math.ceil(total / pageSize) });
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, Search, Send, MapPin, Calendar, Users, DollarSign,
-  ClipboardList, X, AlertCircle, CheckCircle2, Eye,
+  ClipboardList, X, AlertCircle, CheckCircle2, Eye, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser } from '../lib/demoAuth.js';
@@ -134,6 +134,8 @@ export default function GuideCustomRequestsPage() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [destFilter, setDestFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [bidModal, setBidModal] = useState(null);
   const [toasts, setToasts] = useState([]);
   const toastIdRef = { current: 0 };
@@ -157,16 +159,21 @@ export default function GuideCustomRequestsPage() {
     try {
       const params = new URLSearchParams();
       if (destFilter) params.set('destination', destFilter);
+      params.set('page', String(page));
+      params.set('pageSize', '12');
       const res = await authFetch(`/api/guide/custom-requests?${params.toString()}`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'Failed to load requests');
       setRequests(data.requests || []);
+      setTotalPages(Math.max(1, Number(data.totalPages) || 1));
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [destFilter]);
+  }, [destFilter, page]);
+
+  useEffect(() => { setPage(1); }, [destFilter]);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
@@ -229,6 +236,7 @@ export default function GuideCustomRequestsPage() {
       )}
 
       {!loading && !error && filtered.length > 0 && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((req) => (
             <div key={req.RequestID}
@@ -301,6 +309,18 @@ export default function GuideCustomRequestsPage() {
             </div>
           ))}
         </div>
+        {totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-center gap-4">
+            <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 disabled:opacity-40">
+              <ChevronLeft className="h-4 w-4" /> Previous
+            </button>
+            <span className="text-sm text-slate-400">Page {page} of {totalPages}</span>
+            <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 disabled:opacity-40">
+              Next <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Bid Modal */}
