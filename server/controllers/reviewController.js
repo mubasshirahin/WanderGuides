@@ -1,7 +1,13 @@
 import { getPool, query } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 
-/** POST /api/reviews - submit a tourist review for a completed booking. */
+/** POST /api/reviews - submit a tourist review for a completed booking.
+ * Course topics:
+ *  PROCEDURE + TRANSACTION: db/procedures.sql -> sp_SubmitReview (same logic DB level e).
+ *    Node theke chaile: query('EXEC dbo.sp_SubmitReview @bookingId, @touristId, @rating, @comment', {...})
+ *  TRIGGER: db/triggers.sql -> trg_Reviews_AfterInsert guide rating auto-update kore,
+ *    tai nicher manual UPDATE ta double-safe (trigger thakleo / na thakleo thik thakbe).
+ */
 export function createCreateReview(getPoolFn = getPool) {
   return async function createReview(req, res) {
     const touristId = Number(req.user?.id);
