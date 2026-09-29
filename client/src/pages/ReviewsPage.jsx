@@ -6,7 +6,7 @@ import {
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser } from '../lib/demoAuth.js';
 
-export default function ReviewsPage() {
+export default function ReviewsPage({ role = 'tourist' }) {
   const currentUser = getStoredUser();
   const [activeTab, setActiveTab] = useState('received');
   const [reviewsReceived, setReviewsReceived] = useState([]);
@@ -88,7 +88,7 @@ export default function ReviewsPage() {
   if (loading) {
     return (
       <div>
-        <PageHeader eyebrow="Feedback" title="Reviews" description="Rate and review after your tours." />
+        <PageHeader eyebrow="Feedback" title="Reviews" description={role === 'guide' ? 'Read reviews from tourists and respond to them.' : 'Rate and review after your tours.'} />
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
         </div>
@@ -101,7 +101,7 @@ export default function ReviewsPage() {
       <PageHeader
         eyebrow="Feedback"
         title="Reviews"
-        description="Rate and review your travel partners."
+        description={role === 'guide' ? 'Read reviews from tourists and respond to them.' : 'Rate and review your travel partners.'}
       />
 
       {/* Success / Error */}
@@ -132,7 +132,7 @@ export default function ReviewsPage() {
             <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px]">{reviewsReceived.length}</span>
           )}
         </button>
-        <button
+        {role !== 'guide' && <button
           onClick={() => { setActiveTab('write'); setError(null); }}
           className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${
             activeTab === 'write'
@@ -145,8 +145,8 @@ export default function ReviewsPage() {
           {pendingBookings.length > 0 && (
             <span className="ml-1 rounded-full bg-amber-500/30 px-2 py-0.5 text-[10px] text-amber-300">{pendingBookings.length}</span>
           )}
-        </button>
-        <button
+        </button>}
+        {role !== 'guide' && <button
           onClick={() => { setActiveTab('given'); setError(null); }}
           className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${
             activeTab === 'given'
@@ -159,7 +159,7 @@ export default function ReviewsPage() {
           {givenReviews.length > 0 && (
             <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px]">{givenReviews.length}</span>
           )}
-        </button>
+        </button>}
       </div>
 
       {/* ════════════════════════════════════════════════════ */}
@@ -209,7 +209,7 @@ export default function ReviewsPage() {
           ) : (
             <div className="space-y-4">
               {reviewsReceived.map((r) => (
-                <ReviewCard key={r.Id} review={r} />
+                <ReviewCard key={r.Id} review={r} canReply={role === 'guide'} onReplySaved={(updated) => setReviewsReceived((items) => items.map((item) => item.Id === updated.Id ? { ...item, ...updated } : item))} />
               ))}
             </div>
           )}
@@ -384,7 +384,31 @@ export default function ReviewsPage() {
   );
 }
 
-function ReviewCard({ review: r, showRole }) {
+function ReviewCard({ review: r, showRole, canReply = false, onReplySaved }) {
+  const [reply, setReply] = useState(r.GuideResponse || '');
+  const [editingReply, setEditingReply] = useState(!r.GuideResponse);
+  const [savingReply, setSavingReply] = useState(false);
+  const [replyError, setReplyError] = useState('');
+
+  const saveReply = async () => {
+    setSavingReply(true);
+    setReplyError('');
+    try {
+      const res = await authFetch(`/api/reviews/${r.Id}/response`, {
+        method: 'PUT',
+        body: JSON.stringify({ response: reply.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not save your response');
+      onReplySaved?.(data.review);
+      setEditingReply(false);
+    } catch (err) {
+      setReplyError(err.message || 'Could not save your response');
+    } finally {
+      setSavingReply(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
       <div className="flex items-start gap-3">
@@ -422,6 +446,32 @@ function ReviewCard({ review: r, showRole }) {
       </div>
       {r.Comment && (
         <p className="mt-3 text-sm leading-relaxed text-slate-300">{r.Comment}</p>
+      )}
+      {canReply && (
+        <div className="mt-4 border-t border-white/10 pt-4">
+          {r.GuideResponse && !editingReply ? (
+            <div className="rounded-xl bg-brand-500/[0.08] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-brand-300">Your response</p>
+                <button onClick={() => setEditingReply(true)} className="text-xs text-slate-400 hover:text-white">Edit</button>
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-300">{r.GuideResponse}</p>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Respond to this review</label>
+              <textarea value={reply} maxLength={1000} rows={3} onChange={(event) => setReply(event.target.value)} placeholder="Thank the tourist or address their feedback..." className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none focus:border-brand-400" />
+              {replyError && <p role="alert" className="mt-1 text-xs text-red-300">{replyError}</p>}
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span className="text-xs text-slate-500">{reply.length}/1000</span>
+                <div className="flex gap-2">
+                  {r.GuideResponse && <button onClick={() => { setReply(r.GuideResponse); setEditingReply(false); }} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-slate-300">Cancel</button>}
+                  <button onClick={saveReply} disabled={savingReply || !reply.trim()} className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{savingReply ? 'Saving…' : 'Save response'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
