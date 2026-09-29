@@ -229,49 +229,62 @@ export async function acceptBid(req, res) {
     throw new AppError('Invalid bid ID', 400);
   }
 
-  // Fetch the bid along with the associated request (verify ownership)
-  const bidRows = await query(
-    `SELECT
-       tb.BidID, tb.RequestID, tb.GuideID, tb.OfferedPrice, tb.Status AS BidStatus,
-       ctr.TouristID, ctr.StartDate, ctr.EndDate, ctr.Status AS RequestStatus, ctr.Title
-     FROM TourBids tb
-     INNER JOIN CustomTourRequests ctr ON ctr.RequestID = tb.RequestID
-     WHERE tb.BidID = @bidId`,
-    { bidId }
-  );
-
-  if (!bidRows.length) throw new AppError('Bid not found', 404);
-
-  const bid = bidRows[0];
-
-  if (bid.TouristID !== touristId) throw new AppError('You can only accept bids on your own requests', 403);
-  if (bid.RequestStatus !== 'open') throw new AppError('This tour request is no longer open', 400);
-  if (bid.BidStatus !== 'pending') throw new AppError('This bid has already been processed', 400);
-
-  // Use a transaction for atomicity
   const pool = await getPool();
   const transaction = pool.transaction();
+  let bid;
+  let booking;
 
   try {
     await transaction.begin();
 
-    // 1. Accept the bid
-    await transaction.request()
+    // Lock both records before checking state so accept/cancel requests serialize.
+    const bidResult = await transaction.request()
       .input('bidId', bidId)
-      .query(`UPDATE TourBids SET Status = 'accepted' WHERE BidID = @bidId`);
+      .query(
+        `SELECT tb.BidID, tb.RequestID, tb.GuideID, tb.OfferedPrice,
+                tb.Status AS BidStatus, ctr.TouristID, ctr.StartDate, ctr.EndDate,
+                ctr.Status AS RequestStatus, ctr.Title
+         FROM TourBids tb WITH (UPDLOCK, HOLDLOCK)
+         INNER JOIN CustomTourRequests ctr WITH (UPDLOCK, HOLDLOCK)
+           ON ctr.RequestID = tb.RequestID
+         WHERE tb.BidID = @bidId`
+      );
+    bid = bidResult.recordset[0];
+    if (!bid) throw new AppError('Bid not found', 404);
+    if (Number(bid.TouristID) !== Number(touristId)) {
+      throw new AppError('You can only accept bids on your own requests', 403);
+    }
+    if (String(bid.RequestStatus).toLowerCase() !== 'open') {
+      throw new AppError('This tour request is no longer open', 400);
+    }
+    if (String(bid.BidStatus).toLowerCase() !== 'pending') {
+      throw new AppError('This bid has already been processed', 400);
+    }
 
-    // 2. Reject all other bids on the same request
+    // Conditional state changes are checked inside the same transaction.
+    const requestUpdate = await transaction.request()
+      .input('requestId', bid.RequestID)
+      .query(`UPDATE CustomTourRequests SET Status = 'fulfilled'
+              WHERE RequestID = @requestId AND Status = 'open'`);
+    if (requestUpdate.rowsAffected[0] !== 1) {
+      throw new AppError('This tour request is no longer open', 409);
+    }
+
+    const bidUpdate = await transaction.request()
+      .input('bidId', bidId)
+      .query(`UPDATE TourBids SET Status = 'accepted'
+              WHERE BidID = @bidId AND Status = 'pending'`);
+    if (bidUpdate.rowsAffected[0] !== 1) {
+      throw new AppError('This bid has already been processed', 409);
+    }
+
+    // Reject the other offers before creating the single confirmed booking.
     await transaction.request()
       .input('requestId', bid.RequestID)
       .input('bidId', bidId)
       .query(`UPDATE TourBids SET Status = 'rejected' WHERE RequestID = @requestId AND BidID != @bidId AND Status = 'pending'`);
 
-    // 3. Update request status to fulfilled
-    await transaction.request()
-      .input('requestId', bid.RequestID)
-      .query(`UPDATE CustomTourRequests SET Status = 'fulfilled' WHERE RequestID = @requestId`);
-
-    // 4. Create a booking
+    // Create a booking only after this transaction has claimed the open request.
     const bookingResult = await transaction.request()
       .input('touristId', touristId)
       .input('guideId', bid.GuideID)
@@ -286,6 +299,7 @@ export async function acceptBid(req, res) {
          VALUES (@touristId, @guideId, @startDate, @endDate, 'confirmed', @totalAmount, @notes)`
       );
 
+    booking = bookingResult.recordset[0];
     await transaction.commit();
 
     // Emit real-time notification to the accepted guide
@@ -314,10 +328,11 @@ export async function acceptBid(req, res) {
     res.json({
       ok: true,
       message: 'Bid accepted and booking created',
-      booking: bookingResult.recordset[0],
+      booking,
     });
   } catch (err) {
-    await transaction.rollback();
+    await transaction.rollback().catch(() => {});
+    if (err instanceof AppError) throw err;
     console.error('[acceptBid]', err);
     throw new AppError('Failed to accept bid', 500);
   }
@@ -409,9 +424,13 @@ export async function cancelRequest(req, res) {
     await transaction.begin();
 
     // 1. Update request status to cancelled
-    await transaction.request()
+    const cancelUpdate = await transaction.request()
       .input('requestId', requestId)
-      .query(`UPDATE CustomTourRequests SET Status = 'cancelled' WHERE RequestID = @requestId`);
+      .query(`UPDATE CustomTourRequests SET Status = 'cancelled'
+              WHERE RequestID = @requestId AND Status = 'open'`);
+    if (cancelUpdate.rowsAffected[0] !== 1) {
+      throw new AppError('This tour request has already been processed', 409);
+    }
 
     // 2. Reject all pending bids
     const rejectedResult = await transaction.request()
@@ -437,7 +456,8 @@ export async function cancelRequest(req, res) {
 
     res.json({ ok: true, message: 'Request cancelled' });
   } catch (err) {
-    await transaction.rollback();
+    await transaction.rollback().catch(() => {});
+    if (err instanceof AppError) throw err;
     console.error('[cancelRequest]', err);
     throw new AppError('Failed to cancel request', 500);
   }
