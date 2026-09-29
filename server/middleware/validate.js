@@ -119,6 +119,9 @@ export const guideBidSchema = z.object({
 }).strict();
 
 export const guideSelfProfileSchema = z.object({
+  avatarUrl: optionalTrimmedString(1000).refine((value) => !value || /^https?:\/\//i.test(value), {
+    message: 'avatarUrl must be a public http(s) URL',
+  }),
   bio: optionalTrimmedString(2000),
   city: optionalTrimmedString(100),
   specialties: optionalTrimmedString(255),

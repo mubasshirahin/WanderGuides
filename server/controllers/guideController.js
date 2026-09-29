@@ -337,7 +337,7 @@ export async function updateGuideProfile(req, res) {
   const userId = req.user?.id;
   if (!userId) throw new AppError('Unauthorized', 401);
 
-  const { bio, city, specialties, languages, hourlyRate, dailyRate } = req.body || {};
+  const { avatarUrl, bio, city, specialties, languages, hourlyRate, dailyRate } = req.body || {};
 
   const params = {
     userId,
@@ -392,6 +392,13 @@ export async function updateGuideProfile(req, res) {
        WHERE UserID = @userId`,
       params
     );
+  }
+
+  if (avatarUrl !== undefined) {
+    await query('UPDATE Users SET AvatarUrl = @avatarUrl WHERE Id = @userId', {
+      userId,
+      avatarUrl: avatarUrl || null,
+    });
   }
 
   res.json({ ok: true, message: 'Profile updated' });
