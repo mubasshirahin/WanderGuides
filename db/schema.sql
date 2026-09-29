@@ -101,6 +101,7 @@ CREATE TABLE Guides (
     DailyRate   DECIMAL(10,2) NULL,
     Rating      DECIMAL(3,2) NOT NULL DEFAULT 0,
     TotalReviews INT NOT NULL DEFAULT 0,
+    IsVerified  BIT NOT NULL DEFAULT 0,
     IsActive    BIT NOT NULL DEFAULT 1,
     CreatedAt   DATETIME2 DEFAULT SYSUTCDATETIME(),
     UpdatedAt   DATETIME2 DEFAULT SYSUTCDATETIME(),
@@ -381,4 +382,32 @@ CREATE TABLE GuideAvailability (
 );
 
 CREATE INDEX IX_GuideAvailability_GuideId ON GuideAvailability(GuideId);
+
+CREATE TABLE GuideNotifications (
+    Id INT IDENTITY PRIMARY KEY,
+    GuideUserId INT NOT NULL,
+    Type NVARCHAR(40) NOT NULL,
+    Title NVARCHAR(160) NOT NULL,
+    Body NVARCHAR(500) NULL,
+    LinkUrl NVARCHAR(300) NULL,
+    IsRead BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_GuideNotifications_User FOREIGN KEY (GuideUserId) REFERENCES Users(Id) ON DELETE CASCADE
+);
+CREATE INDEX IX_GuideNotifications_UserDate ON GuideNotifications(GuideUserId, CreatedAt DESC);
+
+CREATE TABLE GuideVerificationRequests (
+    Id INT IDENTITY PRIMARY KEY,
+    GuideUserId INT NOT NULL,
+    RequestNote NVARCHAR(2000) NOT NULL,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (Status IN ('pending','approved','rejected')),
+    AdminNote NVARCHAR(1000) NULL,
+    RequestedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    ReviewedAt DATETIME2 NULL,
+    ReviewedByUserId INT NULL,
+    CONSTRAINT FK_GuideVerificationRequests_Guide FOREIGN KEY (GuideUserId) REFERENCES Users(Id),
+    CONSTRAINT FK_GuideVerificationRequests_Admin FOREIGN KEY (ReviewedByUserId) REFERENCES Users(Id)
+);
+CREATE UNIQUE INDEX UX_GuideVerificationRequests_Pending ON GuideVerificationRequests(GuideUserId) WHERE Status = 'pending';
+CREATE INDEX IX_GuideVerificationRequests_StatusDate ON GuideVerificationRequests(Status, RequestedAt DESC);
 

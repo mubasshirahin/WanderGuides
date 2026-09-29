@@ -1,5 +1,6 @@
 import { query } from '../config/db.js';
 import AppError from '../utils/AppError.js';
+import { notifyGuide } from '../utils/guideNotifications.js';
 
 /**
  * GET /api/tourist/dashboard
@@ -114,7 +115,7 @@ export async function cancelBooking(req, res) {
 
   // Verify booking exists and belongs to this tourist
   const existing = await query(
-    `SELECT Id, Status, StartDate FROM Bookings WHERE Id = @id AND TouristUserId = @userId`,
+    `SELECT Id, GuideId, Status, StartDate FROM Bookings WHERE Id = @id AND TouristUserId = @userId`,
     { id: bookingId, userId }
   );
 
@@ -150,6 +151,19 @@ export async function cancelBooking(req, res) {
      VALUES (@userId, 'booking', 'Booking cancelled', 'Your booking was cancelled.', '/dashboard')`,
     { userId }
   );
+
+  try {
+    const touristRows = await query('SELECT FullName FROM Users WHERE Id = @userId', { userId });
+    await notifyGuide({
+      guideId: booking.GuideId,
+      type: 'booking',
+      title: 'Booking cancelled',
+      body: `${touristRows[0]?.FullName || 'A tourist'} cancelled booking #${bookingId}.`,
+      linkUrl: '/bookings',
+    });
+  } catch (notificationError) {
+    console.error('[cancelBooking] Could not notify guide:', notificationError.message);
+  }
 
   res.json({ ok: true, booking: updatedRows[0] });
 }

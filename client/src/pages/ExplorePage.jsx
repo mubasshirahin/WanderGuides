@@ -397,6 +397,7 @@ export default function ExplorePage({ role }) {
             <Avatar src={selected.AvatarUrl} name={selected.FullName} className="h-16 w-16" />
             <div>
               <h2 className="text-xl font-bold text-white">{selected.FullName}</h2>
+              {selected.IsVerified && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300"><CheckCircle className="h-3.5 w-3.5" />Verified guide</span>}
               <p className="flex items-center gap-1 text-sm text-slate-400">
                 <MapPin className="h-3.5 w-3.5 text-brand-400" />
                 {selected.City || 'Various cities'}
@@ -666,7 +667,7 @@ function GuideCard({ guide: g, onView, onBook, onBid, isTourist, isSaved, onSave
         <div className="flex items-center gap-3"><button type="button" onClick={() => onSave(g)} aria-label={isSaved ? 'Remove saved guide' : 'Save guide'} className="rounded-full border border-white/10 p-2 text-slate-300 hover:text-rose-300"><Heart className={`h-4 w-4 ${isSaved ? 'fill-rose-400 text-rose-400' : ''}`} /></button><Stars rating={g.Rating} /></div>
       </div>
 
-      <h3 className="mt-3 text-lg font-semibold text-white">{g.FullName}</h3>
+      <div className="mt-3 flex items-center gap-2"><h3 className="text-lg font-semibold text-white">{g.FullName}</h3>{g.IsVerified && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300"><CheckCircle className="h-3 w-3" />Verified</span>}</div>
       <p className="flex items-center gap-1 text-sm text-slate-400">
         <MapPin className="h-3.5 w-3.5 text-brand-400" />
         {g.City || 'Various cities'}

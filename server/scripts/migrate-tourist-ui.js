@@ -20,6 +20,36 @@ const config = {
 };
 
 const statements = [
+  `IF COL_LENGTH('Guides', 'IsVerified') IS NULL ALTER TABLE Guides ADD IsVerified BIT NOT NULL CONSTRAINT DF_Guides_IsVerified_UI DEFAULT 0`,
+  `IF OBJECT_ID('GuideNotifications', 'U') IS NULL
+   CREATE TABLE GuideNotifications (
+     Id INT IDENTITY PRIMARY KEY,
+     GuideUserId INT NOT NULL,
+     Type NVARCHAR(40) NOT NULL,
+     Title NVARCHAR(160) NOT NULL,
+     Body NVARCHAR(500) NULL,
+     LinkUrl NVARCHAR(300) NULL,
+     IsRead BIT NOT NULL DEFAULT 0,
+     CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+     CONSTRAINT FK_GuideNotifications_User_UI FOREIGN KEY (GuideUserId) REFERENCES Users(Id) ON DELETE CASCADE
+   )`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GuideNotifications_UserDate' AND object_id = OBJECT_ID('GuideNotifications')) CREATE INDEX IX_GuideNotifications_UserDate ON GuideNotifications(GuideUserId, CreatedAt DESC)`,
+  `IF OBJECT_ID('GuideVerificationRequests', 'U') IS NULL
+   CREATE TABLE GuideVerificationRequests (
+     Id INT IDENTITY PRIMARY KEY,
+     GuideUserId INT NOT NULL,
+     RequestNote NVARCHAR(2000) NOT NULL,
+     Status NVARCHAR(20) NOT NULL CONSTRAINT DF_GuideVerificationRequests_Status_UI DEFAULT 'pending',
+     AdminNote NVARCHAR(1000) NULL,
+     RequestedAt DATETIME2 NOT NULL CONSTRAINT DF_GuideVerificationRequests_RequestedAt_UI DEFAULT SYSUTCDATETIME(),
+     ReviewedAt DATETIME2 NULL,
+     ReviewedByUserId INT NULL,
+     CONSTRAINT CK_GuideVerificationRequests_Status_UI CHECK (Status IN ('pending','approved','rejected')),
+     CONSTRAINT FK_GuideVerificationRequests_Guide_UI FOREIGN KEY (GuideUserId) REFERENCES Users(Id),
+     CONSTRAINT FK_GuideVerificationRequests_Admin_UI FOREIGN KEY (ReviewedByUserId) REFERENCES Users(Id)
+   )`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_GuideVerificationRequests_Pending_UI' AND object_id = OBJECT_ID('GuideVerificationRequests')) CREATE UNIQUE INDEX UX_GuideVerificationRequests_Pending_UI ON GuideVerificationRequests(GuideUserId) WHERE Status = 'pending'`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GuideVerificationRequests_StatusDate_UI' AND object_id = OBJECT_ID('GuideVerificationRequests')) CREATE INDEX IX_GuideVerificationRequests_StatusDate_UI ON GuideVerificationRequests(Status, RequestedAt DESC)`,
   `IF COL_LENGTH('Reviews', 'GuideResponse') IS NULL ALTER TABLE Reviews ADD GuideResponse NVARCHAR(1000) NULL`,
   `IF COL_LENGTH('Reviews', 'GuideResponseAt') IS NULL ALTER TABLE Reviews ADD GuideResponseAt DATETIME2 NULL`,
   `IF COL_LENGTH('GuideTours', 'ViewCount') IS NULL ALTER TABLE GuideTours ADD ViewCount INT NOT NULL CONSTRAINT DF_GuideTours_ViewCount_UI DEFAULT 0`,

@@ -60,7 +60,7 @@ export async function exploreGuides(req, res) {
     SELECT
       g.Id, g.UserID, g.FullName, g.City, g.Bio, g.Specialties, g.Languages,
       g.HourlyRate, COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate,
-      g.Rating, g.TotalReviews, u.AvatarUrl
+      g.Rating, g.TotalReviews, g.IsVerified, u.AvatarUrl
     ${base}
     ORDER BY ${orderBy}
     OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
@@ -96,7 +96,7 @@ export async function getGuideEx(req, res) {
       g.Id, g.UserID, g.FullName, g.Email, g.Phone, g.City, g.Bio,
       g.Specialties, g.Languages, g.HourlyRate,
       COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate,
-      g.Rating, g.TotalReviews, g.IsActive, u.AvatarUrl
+      g.Rating, g.TotalReviews, g.IsActive, g.IsVerified, u.AvatarUrl
     FROM Guides g
     LEFT JOIN Users u ON u.Id = g.UserID
     WHERE g.Id = @id AND g.IsActive = 1
@@ -231,7 +231,7 @@ export function createListGuides(queryFn = query) {
       SELECT g.Id, g.UserID, g.FullName, g.Email, g.Phone, g.City, g.Bio,
              g.Specialties, g.Languages, g.HourlyRate,
              COALESCE(g.DailyRate, g.RatePerDay) AS DailyRate,
-             g.Rating, g.TotalReviews, g.IsActive, g.CreatedAt, g.UpdatedAt,
+             g.Rating, g.TotalReviews, g.IsActive, g.IsVerified, g.CreatedAt, g.UpdatedAt,
              u.AvatarUrl
       ${baseSql}
       ORDER BY ${orderBy}

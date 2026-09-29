@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Loader2, User, Mail, Shield, MapPin, Star,
-  AlertCircle, X, Clock, Globe, DollarSign, Edit3, Save, CalendarDays, ChevronLeft, ChevronRight,
+  AlertCircle, X, Clock, Globe, DollarSign, Edit3, Save, CalendarDays, ChevronLeft, ChevronRight, ShieldCheck,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser } from '../lib/demoAuth.js';
@@ -280,12 +280,75 @@ export default function GuideProfileCalendarPage() {
               </div>
             )}
           </div>
+          <VerificationPanel />
           <AvailabilityCalendar />
         </div>
       )}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
+  );
+}
+
+function VerificationPanel() {
+  const [request, setRequest] = useState(null);
+  const [verified, setVerified] = useState(false);
+  const [requestNote, setRequestNote] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/guide-verifications/me');
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not load verification status');
+      setRequest(data.request || null);
+      setVerified(Boolean(data.isVerified));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setSubmitting(true); setError(''); setNotice('');
+    try {
+      const res = await authFetch('/api/guide-verifications', { method: 'POST', body: JSON.stringify({ requestNote }) });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not submit verification request');
+      setRequest(data.request); setRequestNote(''); setNotice('Your verification request was sent to the admin team.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl sm:p-6">
+      <h3 className="mb-2 flex items-center gap-2 font-bold text-white"><ShieldCheck className="h-4 w-4 text-brand-400" />Identity verification</h3>
+      {loading ? <p className="text-sm text-slate-400">Loading verification status…</p> : verified ? (
+        <p className="text-sm text-emerald-300">Your guide profile is verified and displays a verification badge to tourists.</p>
+      ) : request?.Status === 'pending' ? (
+        <div className="space-y-2 text-sm"><p className="text-amber-300">Your request is awaiting review.</p><p className="text-slate-400">{request.RequestNote}</p></div>
+      ) : (
+        <form onSubmit={submit} className="space-y-3">
+          <p className="text-sm text-slate-400">Request a manual identity review. Do not include identity numbers or upload private documents in this note.</p>
+          {request?.Status === 'rejected' && <p className="rounded-lg bg-rose-500/10 p-3 text-sm text-rose-300">Previous request: {request.AdminNote || 'Please contact support for details.'}</p>}
+          {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
+          {notice && <p role="status" className="text-sm text-emerald-300">{notice}</p>}
+          <textarea value={requestNote} onChange={(event) => setRequestNote(event.target.value)} required minLength={20} maxLength={2000} rows={3} placeholder="Tell the admin team how they can verify your guide identity."
+            className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-brand-400" />
+          <button type="submit" disabled={submitting} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{submitting ? 'Sending…' : 'Request verification'}</button>
+        </form>
+      )}
+      {!loading && request?.Status === 'pending' && error && <p role="alert" className="mt-2 text-sm text-rose-300">{error}</p>}
+    </section>
   );
 }
 

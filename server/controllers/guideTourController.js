@@ -9,10 +9,19 @@ export async function createTour(req, res) {
   const guideId = req.user?.id;
   if (!guideId) throw new AppError('Unauthorized', 401);
 
-  const { title, description, location, price, durationHours, maxGroupSize, imageUrl, category, difficulty, meetingPoint, highlights, itinerary } = req.body || {};
+  const { title, description, location, price, durationHours, maxGroupSize, imageUrl, category, difficulty, meetingPoint, highlights, included, itinerary } = req.body || {};
 
   if (!title || price === undefined) {
     throw new AppError('title and price are required', 400);
+  }
+  if (!String(title).trim() || !String(location || '').trim() || !Number.isFinite(Number(price)) || Number(price) < 0) {
+    throw new AppError('Title, location, and a non-negative price are required', 400);
+  }
+  if (!Number.isInteger(Number(maxGroupSize || 10)) || Number(maxGroupSize || 10) < 1 || Number(maxGroupSize || 10) > 50) {
+    throw new AppError('Group size must be between 1 and 50', 400);
+  }
+  if (!Number.isFinite(Number(durationHours || 8)) || Number(durationHours || 8) < 1 || Number(durationHours || 8) > 240) {
+    throw new AppError('Duration must be between 1 and 240 hours', 400);
   }
   if (imageUrl) {
     try {
@@ -24,12 +33,12 @@ export async function createTour(req, res) {
   }
 
   const rows = await query(
-    `INSERT INTO GuideTours (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize, ImageUrl, Category, Difficulty, MeetingPoint, Highlights, Itinerary)
+    `INSERT INTO GuideTours (GuideId, Title, Description, Location, Price, DurationHours, MaxGroupSize, ImageUrl, Category, Difficulty, MeetingPoint, Highlights, Included, Itinerary)
      OUTPUT INSERTED.Id, INSERTED.Title, INSERTED.Description, INSERTED.Location,
             INSERTED.Price, INSERTED.DurationHours, INSERTED.MaxGroupSize,
             INSERTED.ImageUrl, INSERTED.Category, INSERTED.Difficulty, INSERTED.MeetingPoint, INSERTED.Highlights, INSERTED.Itinerary,
-            INSERTED.IsActive, INSERTED.CreatedAt
-     VALUES (@guideId, @title, @description, @location, @price, @durationHours, @maxGroupSize, @imageUrl, @category, @difficulty, @meetingPoint, @highlights, @itinerary)`,
+            INSERTED.Included, INSERTED.IsActive, INSERTED.CreatedAt
+     VALUES (@guideId, @title, @description, @location, @price, @durationHours, @maxGroupSize, @imageUrl, @category, @difficulty, @meetingPoint, @highlights, @included, @itinerary)`,
     {
       guideId,
       title,
@@ -43,11 +52,62 @@ export async function createTour(req, res) {
       difficulty: difficulty || null,
       meetingPoint: meetingPoint || null,
       highlights: highlights || null,
+      included: included || null,
       itinerary: itinerary ? (typeof itinerary === 'string' ? itinerary : JSON.stringify(itinerary)) : null,
     }
   );
 
   res.status(201).json({ ok: true, tour: rows[0] });
+}
+
+/** PUT /api/guide/tours/:tourId - update a listing owned by the signed-in guide. */
+export async function updateTour(req, res) {
+  const guideId = req.user?.id;
+  const tourId = Number(req.params.tourId);
+  if (!guideId) throw new AppError('Unauthorized', 401);
+  if (!Number.isInteger(tourId) || tourId <= 0) throw new AppError('Invalid tour ID', 400);
+
+  const { title, description, location, price, durationHours, maxGroupSize, imageUrl, category, difficulty, meetingPoint, highlights, included, itinerary } = req.body || {};
+  if (!title?.trim() || !location?.trim() || !Number.isFinite(Number(price)) || Number(price) < 0) {
+    throw new AppError('Title, location, and a non-negative price are required', 400);
+  }
+  if (!Number.isInteger(Number(maxGroupSize)) || Number(maxGroupSize) < 1 || Number(maxGroupSize) > 50) {
+    throw new AppError('Group size must be between 1 and 50', 400);
+  }
+  if (!Number.isFinite(Number(durationHours || 8)) || Number(durationHours || 8) < 1 || Number(durationHours || 8) > 240) {
+    throw new AppError('Duration must be between 1 and 240 hours', 400);
+  }
+  if (imageUrl) {
+    try {
+      const parsedImageUrl = new URL(imageUrl);
+      if (!['http:', 'https:'].includes(parsedImageUrl.protocol)) throw new Error('invalid protocol');
+    } catch {
+      throw new AppError('imageUrl must be a valid http(s) URL', 400);
+    }
+  }
+
+  const rows = await query(
+    `UPDATE GuideTours
+     SET Title = @title, Description = @description, Location = @location, Price = @price,
+         DurationHours = @durationHours, MaxGroupSize = @maxGroupSize, ImageUrl = @imageUrl,
+         Category = @category, Difficulty = @difficulty, MeetingPoint = @meetingPoint,
+         Highlights = @highlights, Included = @included, Itinerary = @itinerary,
+         UpdatedAt = SYSUTCDATETIME()
+     OUTPUT INSERTED.Id, INSERTED.Title, INSERTED.Description, INSERTED.Location, INSERTED.Price,
+            INSERTED.DurationHours, INSERTED.MaxGroupSize, INSERTED.ImageUrl, INSERTED.Category,
+            INSERTED.Difficulty, INSERTED.MeetingPoint, INSERTED.Highlights, INSERTED.Included,
+            INSERTED.Itinerary, INSERTED.IsActive, INSERTED.ViewCount
+     WHERE Id = @tourId AND GuideId = @guideId`,
+    {
+      tourId, guideId, title: title.trim(), description: description || null, location: location.trim(),
+      price: Number(price), durationHours: Number(durationHours) || 8, maxGroupSize: Number(maxGroupSize),
+      imageUrl: imageUrl || null, category: category || null, difficulty: difficulty || null,
+      meetingPoint: meetingPoint || null, highlights: highlights || null, included: included || null,
+      itinerary: itinerary ? (typeof itinerary === 'string' ? itinerary : JSON.stringify(itinerary)) : null,
+    }
+  );
+  if (!rows.length) throw new AppError('Tour not found', 404);
+  res.json({ ok: true, tour: rows[0] });
 }
 
 /**
@@ -61,7 +121,8 @@ export async function getMyTours(req, res) {
   const rows = await query(
     `SELECT
        gt.Id, gt.Title, gt.Description, gt.Location, gt.Price,
-       gt.DurationHours, gt.MaxGroupSize, gt.IsActive, gt.ViewCount AS viewCount, gt.CreatedAt,
+       gt.DurationHours, gt.MaxGroupSize, gt.ImageUrl, gt.Category, gt.Difficulty, gt.MeetingPoint,
+       gt.Highlights, gt.Included, gt.Itinerary, gt.IsActive, gt.ViewCount AS viewCount, gt.CreatedAt,
        (SELECT COUNT(*) FROM Bookings b WHERE b.GuideId = @guideId AND (b.TourId = gt.Id OR (b.TourId IS NULL AND b.Notes LIKE '%' + gt.Title + '%'))) AS bookingCount,
        (SELECT COUNT(*) FROM TourBids tb WHERE tb.GuideID = @guideId AND tb.RequestID IN (
          SELECT ctr.RequestID FROM CustomTourRequests ctr WHERE ctr.Title LIKE '%' + gt.Title + '%'
@@ -113,14 +174,14 @@ export async function getTourResponses(req, res) {
   const bookings = await query(
     `SELECT
        b.Id AS BookingId, b.TouristUserId, b.StartDate, b.EndDate,
-       b.Status, b.TotalAmount, b.Notes, b.CreatedAt,
+       b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
        u.FullName AS TouristName, u.Email AS TouristEmail, u.AvatarUrl AS TouristAvatar
      FROM Bookings b
      INNER JOIN Users u ON u.Id = b.TouristUserId
      WHERE b.GuideId = @guideId
-       AND (b.Notes LIKE '%' + @tourTitle + '%' OR b.Notes IS NULL)
+       AND (b.TourId = @tourId OR (b.TourId IS NULL AND b.Notes LIKE '%' + @tourTitle + '%'))
      ORDER BY b.CreatedAt DESC`,
-    { guideId, tourTitle: tourRows[0].Title }
+    { guideId, tourId, tourTitle: tourRows[0].Title }
   );
 
   // Get bids for custom tours matching this guide
@@ -289,6 +350,7 @@ export async function getGuideDashboard(req, res) {
        (SELECT ISNULL(SUM(TotalAmount), 0) FROM Bookings WHERE GuideId = @guideId AND Status = 'completed') AS totalEarnings,
        (SELECT ISNULL(SUM(TotalAmount), 0) FROM Bookings WHERE GuideId = @guideId AND Status = 'completed' AND PaymentStatus = 'paid') AS paidEarnings,
        (SELECT ISNULL(SUM(TotalAmount), 0) FROM Bookings WHERE GuideId = @guideId AND Status = 'completed' AND PaymentStatus <> 'paid') AS unpaidEarnings,
+       (SELECT ISNULL(SUM(TotalAmount), 0) FROM Bookings WHERE GuideId = @guideId AND Status IN ('pending','confirmed') AND PaymentStatus <> 'paid' AND StartDate >= CAST(GETDATE() AS DATE)) AS upcomingPayments,
        (SELECT ISNULL(Rating, 0) FROM Guides WHERE Email = (SELECT Email FROM Users WHERE Id = @guideId)) AS currentRating`,
     { guideId }
   );

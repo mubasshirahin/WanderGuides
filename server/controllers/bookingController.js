@@ -1,6 +1,7 @@
 import { query } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import { getIO } from '../utils/socket.js';
+import { notifyGuide } from '../utils/guideNotifications.js';
 
 const ALLOWED_STATUSES = new Set(['pending', 'confirmed', 'completed', 'cancelled']);
 const TOURIST_STATUS_UPDATES = new Set(['cancelled']);
@@ -215,6 +216,18 @@ export const createBooking = async (req, res) => {
 
   try {
     const rows = await query(insertSql, params);
+    try {
+      const touristRows = await query('SELECT FullName FROM Users WHERE Id = @touristId', { touristId });
+      await notifyGuide({
+        guideId: guideUserId,
+        type: 'booking',
+        title: 'New booking request',
+        body: `${touristRows[0]?.FullName || 'A tourist'} requested a booking for ${new Date(startDate).toLocaleDateString()}.`,
+        linkUrl: '/bookings',
+      });
+    } catch (notificationError) {
+      console.error('[createBooking] Could not notify guide:', notificationError.message);
+    }
     res.status(201).json({ ok: true, booking: rows[0] });
   } catch (err) {
     console.error('[createBooking]', err);
@@ -291,6 +304,21 @@ export function createUpdateBookingStatus(queryFn = query) {
         { userId: booking.TouristUserId, title, body }
       );
       try { getIO().to(String(booking.TouristUserId)).emit('notification:new', notificationRows[0]); } catch { /* persisted notification remains available */ }
+    }
+
+    if (queryFn === query && status === 'cancelled' && role === 'tourist') {
+      try {
+        const touristRows = await query('SELECT FullName FROM Users WHERE Id = @touristId', { touristId: booking.TouristUserId });
+        await notifyGuide({
+          guideId: booking.GuideId,
+          type: 'booking',
+          title: 'Booking cancelled',
+          body: `${touristRows[0]?.FullName || 'A tourist'} cancelled booking #${bookingId}.`,
+          linkUrl: '/bookings',
+        });
+      } catch (notificationError) {
+        console.error('[updateBookingStatus] Could not notify guide:', notificationError.message);
+      }
     }
 
     res.json({ ok: true, booking: updatedRows[0] });
