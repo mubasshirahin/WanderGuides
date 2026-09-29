@@ -10,7 +10,7 @@ npm --prefix server run migrate:ui
 npm --prefix server run seed
 ```
 
-The migration adds fields, itinerary and group-size booking data, saved guides, notifications, and review tables used by the current app. The seed command adds fictional Bangladesh guide listings and tour packages so the guide and tour pages have demo content. It is safe to run the seed command again; it updates/reuses those listings instead of duplicating them.
+The migration adds fields, itinerary and group-size booking data, saved guides, notifications, guide review responses, and tour view counters used by the app. Run it after updating the project so these guide dashboard features work with an existing database. The seed command adds fictional Bangladesh guide listings and tour packages so the guide and tour pages have demo content. It is safe to run the seed command again; it updates/reuses those listings instead of duplicating them.
 
 Run the API and frontend in separate terminals:
 

@@ -442,7 +442,7 @@ export default function MyToursAndBookingsPage() {
                 </p>
                 <p className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-brand-400 shrink-0" />
-                  {tour.Duration} {tour.Duration === 1 ? 'day' : 'days'}
+                  {tour.DurationHours || 8} {Number(tour.DurationHours || 8) === 1 ? 'hour' : 'hours'}
                 </p>
                 <p className="flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5 text-brand-400 shrink-0" />
@@ -450,11 +450,11 @@ export default function MyToursAndBookingsPage() {
                 </p>
               </div>
 
-              {tour.BookingCount != null && (
-                <p className="text-xs text-slate-500 mb-3">
-                  {tour.BookingCount} {tour.BookingCount === 1 ? 'booking' : 'bookings'}
-                </p>
-              )}
+              <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" />{tour.viewCount || 0} views</span>
+                <span>{tour.bookingCount || 0} {tour.bookingCount === 1 ? 'booking' : 'bookings'}</span>
+                <span>{Number(tour.viewCount) > 0 ? ((Number(tour.bookingCount || 0) / Number(tour.viewCount)) * 100).toFixed(1) : '0.0'}% conversion</span>
+              </div>
 
               <div className="flex flex-wrap gap-2 pt-3 border-t border-white/5">
                 <button onClick={() => openResponses(tour)}
