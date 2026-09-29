@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import Landing from './pages/Landing.jsx';
@@ -113,7 +113,8 @@ export default function App({ googleEnabled = false }) {
             path="/"
             element={<ProtectedLayout isAuthenticated={isAuthenticated} />}
           >
-            <Route path="guides" element={<GuidesPage role={role} />} />
+            {/* Role-er baire kono page-e dhukle dashboard-e pathano hoy — dead page rakha hoy na */}
+            <Route path="guides" element={role === 'admin' ? <GuidesPage role={role} /> : <Navigate to="/dashboard" replace />} />
             {role === 'admin' && <Route path="guides/new" element={<GuideFormPage />} />}
             {role === 'admin' && <Route path="guides/:id/edit" element={<GuideFormPage />} />}
             {role === 'admin' && <Route path="guide-verifications" element={<GuideVerificationPage />} />}
@@ -123,15 +124,15 @@ export default function App({ googleEnabled = false }) {
               role === 'guide' ? <GuideDashboardPage /> :
               <DashboardPage role={role} />
             } />
-            <Route path="my-tours" element={role === 'guide' ? <MyToursAndBookingsPage /> : <DashboardPage role={role} />} />
-            <Route path="custom-requests" element={role === 'guide' ? <GuideCustomRequestsPage /> : <CustomTourPage role={role} />} />
-            <Route path="availability" element={role === 'guide' ? <GuideProfileCalendarPage /> : <ProfilePage role={role} />} />
+            <Route path="my-tours" element={role === 'guide' ? <MyToursAndBookingsPage /> : <Navigate to="/dashboard" replace />} />
+            <Route path="custom-requests" element={role === 'guide' ? <GuideCustomRequestsPage /> : role === 'tourist' ? <Navigate to="/custom-tour" replace /> : <Navigate to="/dashboard" replace />} />
+            <Route path="availability" element={role === 'guide' ? <GuideProfileCalendarPage /> : <Navigate to="/profile" replace />} />
             <Route path="explore" element={<ExplorePage role={role} />} />
             <Route path="browse-tours" element={<BrowseToursPage role={role} />} />
             <Route path="messages" element={<MessagesPage role={role} />} />
             <Route path="custom-tour" element={<CustomTourPage role={role} />} />
             <Route path="reviews" element={<ReviewsPage role={role} />} />
-            <Route path="profile" element={role === 'tourist' ? <TouristProfilePage /> : <ProfilePage role={role} />} />
+            <Route path="profile" element={role === 'tourist' ? <TouristProfilePage /> : role === 'guide' ? <Navigate to="/availability" replace /> : <ProfilePage role={role} />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />

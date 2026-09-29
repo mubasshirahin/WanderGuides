@@ -322,10 +322,13 @@ export async function acceptBid(req, res) {
       .input('totalAmount', bid.OfferedPrice)
       .input('notes', `Accepted from custom tour: ${bid.Title}`)
       .query(
-        `INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes)
+        // NOTE: Bookings-te AFTER INSERT trigger ache, tai OUTPUT ... INTO @table pattern.
+        `DECLARE @newBooking TABLE (Id INT, TouristUserId INT, GuideId INT, StartDate DATE, EndDate DATE, Status NVARCHAR(20), TotalAmount DECIMAL(10,2), Notes NVARCHAR(500), CreatedAt DATETIME2);
+         INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes)
          OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate,
-                INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes, INSERTED.CreatedAt
-         VALUES (@touristId, @guideId, @startDate, @endDate, 'confirmed', @totalAmount, @notes)`
+                INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes, INSERTED.CreatedAt INTO @newBooking
+         VALUES (@touristId, @guideId, @startDate, @endDate, 'confirmed', @totalAmount, @notes);
+         SELECT Id, TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes, CreatedAt FROM @newBooking;`
       );
 
     booking = bookingResult.recordset[0];

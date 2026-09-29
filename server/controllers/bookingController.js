@@ -149,10 +149,14 @@ export const createBooking = async (req, res) => {
     .join(' — ')
     .slice(0, 500) || null;
 
+  // NOTE: Bookings-te AFTER INSERT trigger ache, tai OUTPUT ... INTO @table
+  // pattern (trigger thakle OUTPUT without INTO SQL error 334 dey).
   const insertSql = `
+    DECLARE @newBooking TABLE (Id INT, TouristUserId INT, GuideId INT, TourId INT, GroupSize INT, StartDate DATE, EndDate DATE, Status NVARCHAR(20), BookingType NVARCHAR(20), TotalAmount DECIMAL(10,2), FinalPrice DECIMAL(10,2), PaymentStatus NVARCHAR(20), Notes NVARCHAR(500), CreatedAt DATETIME2);
     INSERT INTO Bookings (TouristUserId, GuideId, TourId, GroupSize, StartDate, EndDate, Status, BookingType, TotalAmount, FinalPrice, Notes)
-    OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.TourId, INSERTED.GroupSize, INSERTED.StartDate, INSERTED.EndDate, INSERTED.Status, INSERTED.BookingType, INSERTED.TotalAmount, INSERTED.FinalPrice, INSERTED.PaymentStatus, INSERTED.Notes, INSERTED.CreatedAt
-    VALUES (@touristId, @guideUserId, @tourId, @groupSize, @startDate, @endDate, 'pending', 'direct', @totalAmount, @totalAmount, @notes)
+    OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.TourId, INSERTED.GroupSize, INSERTED.StartDate, INSERTED.EndDate, INSERTED.Status, INSERTED.BookingType, INSERTED.TotalAmount, INSERTED.FinalPrice, INSERTED.PaymentStatus, INSERTED.Notes, INSERTED.CreatedAt INTO @newBooking
+    VALUES (@touristId, @guideUserId, @tourId, @groupSize, @startDate, @endDate, 'pending', 'direct', @totalAmount, @totalAmount, @notes);
+    SELECT Id, TouristUserId, GuideId, TourId, GroupSize, StartDate, EndDate, Status, BookingType, TotalAmount, FinalPrice, PaymentStatus, Notes, CreatedAt FROM @newBooking;
   `;
 
   const params = {
@@ -267,13 +271,16 @@ export function createUpdateBookingStatus(queryFn = query) {
       }
     }
 
+    // NOTE: Bookings-te AFTER UPDATE trigger ache, tai OUTPUT ... INTO @table pattern.
     const updatedRows = await queryFn(
-      `UPDATE Bookings
+      `DECLARE @updBooking TABLE (Id INT, TouristUserId INT, GuideId INT, StartDate DATE, EndDate DATE, Status NVARCHAR(20), TotalAmount DECIMAL(10,2), Notes NVARCHAR(500), CreatedAt DATETIME2);
+       UPDATE Bookings
        SET Status = @status
        OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate,
               INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes,
-              INSERTED.CreatedAt
-       WHERE Id = @bookingId`,
+              INSERTED.CreatedAt INTO @updBooking
+       WHERE Id = @bookingId;
+       SELECT Id, TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes, CreatedAt FROM @updBooking;`,
       { bookingId, status }
     );
 

@@ -138,11 +138,14 @@ export async function cancelBooking(req, res) {
   }
 
   // Update status to cancelled
+  // NOTE: Bookings-te AFTER UPDATE trigger ache, tai OUTPUT ... INTO @table pattern.
   const updatedRows = await query(
-    `UPDATE Bookings SET Status = 'cancelled'
+    `DECLARE @updBooking TABLE (Id INT, TouristUserId INT, GuideId INT, StartDate DATE, EndDate DATE, Status NVARCHAR(20), TotalAmount DECIMAL(10,2), Notes NVARCHAR(500), CreatedAt DATETIME2);
+     UPDATE Bookings SET Status = 'cancelled'
      OUTPUT INSERTED.Id, INSERTED.TouristUserId, INSERTED.GuideId, INSERTED.StartDate,
-            INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes, INSERTED.CreatedAt
-     WHERE Id = @id AND TouristUserId = @userId`,
+            INSERTED.EndDate, INSERTED.Status, INSERTED.TotalAmount, INSERTED.Notes, INSERTED.CreatedAt INTO @updBooking
+     WHERE Id = @id AND TouristUserId = @userId;
+     SELECT Id, TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes, CreatedAt FROM @updBooking;`,
     { id: bookingId, userId }
   );
 

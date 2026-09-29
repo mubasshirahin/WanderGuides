@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
-import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, Clock, MapPin, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, MapPin, ShieldCheck, ChevronDown } from 'lucide-react';
+import { getStoredUser } from '../lib/demoAuth.js';
 
 const loggedOutLinks = [{ to: '/', label: 'Home' }];
 
@@ -9,29 +10,161 @@ const roleLinks = {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/explore', label: 'Explore Guides', icon: Search },
     { to: '/browse-tours', label: 'Browse Tours', icon: MapPin },
+    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
     { to: '/messages', label: 'Messages', icon: MessageSquare },
     { to: '/custom-tour', label: 'Custom Tour', icon: ClipboardList },
-    { to: '/reviews', label: 'Reviews', icon: Star },
-    { to: '/profile', label: 'Profile', icon: UserCircle },
   ],
   guide: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/my-tours', label: 'My Tours', icon: Map },
     { to: '/bookings', label: 'Bookings', icon: CalendarDays },
-    { to: '/custom-requests', label: 'Custom Requests', icon: ClipboardList },
     { to: '/messages', label: 'Messages', icon: MessageSquare },
-    { to: '/reviews', label: 'Reviews', icon: Star },
-    { to: '/availability', label: 'Profile', icon: UserCircle },
+    { to: '/custom-requests', label: 'Custom Tour Request', icon: ClipboardList },
   ],
   admin: [
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/guides', label: 'Manage Guides', icon: Search },
     { to: '/guides/new', label: 'Add Guide', icon: Plus },
     { to: '/guide-verifications', label: 'Verification', icon: ShieldCheck },
     { to: '/bookings', label: 'Bookings', icon: CalendarDays },
-    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/profile', label: 'Profile', icon: UserCircle },
   ],
 };
+
+// Profile menu target per role: guide-er profile + calendar eksathe /availability-te.
+const profileTarget = (role) => (role === 'guide' ? '/availability' : '/profile');
+
+function ProfileMenu({ role, onLogout, onNavigate, mobile = false }) {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const boxRef = useRef(null);
+  const stored = getStoredUser() || {};
+  const name = stored.FullName || stored.fullName || stored.name || stored.Email || 'Account';
+  const initial = String(name).trim().charAt(0).toUpperCase() || 'A';
+  const toProfile = profileTarget(role);
+  const menuActive = ['/profile', '/availability', '/reviews'].includes(location.pathname);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open ]);
+
+  const go = () => {
+    setOpen(false);
+    onNavigate?.();
+  };
+
+  const menuItems = [
+    { to: toProfile, label: 'My Profile', icon: UserCircle },
+    ...(role === 'admin' ? [] : [{ to: '/reviews', label: 'Reviews', icon: Star }]),
+  ];
+
+  if (mobile) {
+    return (
+      <div className="mt-1 border-t border-white/10 pt-3">
+        <div className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-teal-500 text-sm font-bold text-white">
+            {initial}
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-sm font-semibold text-white">{name}</span>
+            <span className="block text-xs capitalize text-slate-400">{role || 'account'}</span>
+          </span>
+        </div>
+        <div className="mt-2 flex flex-col gap-1">
+          {menuItems.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={go}
+              className={({ isActive }) =>
+                `flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-gradient-to-r from-brand-500/15 to-teal-500/15 text-brand-400'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                }`
+              }
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </NavLink>
+          ))}
+          <button
+            onClick={() => {
+              go();
+              onLogout();
+            }}
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/10"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5 text-left transition-colors duration-300 ${
+          menuActive || open
+            ? 'border-brand-500/40 bg-brand-500/10'
+            : 'border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.07]'
+        }`}
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-teal-500 text-sm font-bold text-white">
+          {initial}
+        </span>
+        <span className="hidden max-w-[140px] leading-tight lg:block">
+          <span className="block truncate text-sm font-semibold text-white">{name}</span>
+          <span className="block text-[11px] capitalize text-slate-400">{role || 'account'}</span>
+        </span>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-ink-950/95 shadow-2xl backdrop-blur-xl">
+          <div className="border-b border-white/10 px-4 py-3 leading-tight">
+            <p className="truncate text-sm font-semibold text-white">{name}</p>
+            <p className="text-xs capitalize text-slate-400">{role || 'account'}</p>
+          </div>
+          <div className="p-1.5">
+            {menuItems.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={go}
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive ? 'bg-brand-500/15 text-brand-300' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </NavLink>
+            ))}
+            <button
+              onClick={() => {
+                go();
+                onLogout();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/10"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Navbar({ isAuthenticated, role, onLogout }) {
   const [open, setOpen] = useState(false);
@@ -96,13 +229,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
           {/* Desktop auth buttons */}
           <div className="hidden items-center gap-3 md:flex">
             {isAuthenticated ? (
-              <button
-                onClick={onLogout}
-                className="btn-sheen inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/15"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </button>
+              <ProfileMenu role={role} onLogout={onLogout} />
             ) : (
               <>
                 <Link
@@ -135,7 +262,7 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
       {/* Mobile menu */}
       <div
         className={`md:hidden overflow-hidden transition-all duration-500 ${
-          open ? 'max-h-96 border-t border-white/10 bg-ink-950/95 backdrop-blur-xl' : 'max-h-0'
+          open ? 'max-h-[32rem] overflow-y-auto border-t border-white/10 bg-ink-950/95 backdrop-blur-xl' : 'max-h-0'
         }`}
       >
         <div className="px-4 pb-4 pt-3">
@@ -159,20 +286,11 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
             ))}
           </div>
 
-          <div className="mt-3 border-t border-white/10 pt-3">
+          <div className="mt-3">
             {isAuthenticated ? (
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  onLogout();
-                }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </button>
+              <ProfileMenu role={role} onLogout={onLogout} onNavigate={() => setOpen(false)} mobile />
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 border-t border-white/10 pt-3">
                 <Link
                   to="/auth"
                   onClick={() => setOpen(false)}

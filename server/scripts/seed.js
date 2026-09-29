@@ -105,10 +105,13 @@ async function ensureBooking(b) {
   );
   if (exists.length) return exists[0].Id;
 
+  // NOTE: Bookings-te trigger thakle OUTPUT without INTO fail kore, tai INTO pattern.
   const sql = `
+    DECLARE @seedBooking TABLE (Id INT);
     INSERT INTO Bookings (TouristUserId, GuideId, StartDate, EndDate, Status, TotalAmount, Notes)
-    OUTPUT INSERTED.Id
-    VALUES (@tourist, @guide, @startDate, @endDate, @status, @totalAmount, @notes)
+    OUTPUT INSERTED.Id INTO @seedBooking
+    VALUES (@tourist, @guide, @startDate, @endDate, @status, @totalAmount, @notes);
+    SELECT Id FROM @seedBooking;
   `;
   const rows = await query(sql, {
     tourist: b.touristId,
@@ -130,9 +133,11 @@ async function ensureReview(review) {
 
   const rows = await query(
     `
+      DECLARE @seedReview TABLE (Id INT);
       INSERT INTO Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
-      OUTPUT INSERTED.Id
-      VALUES (@bookingId, @touristId, @guideId, @rating, @comment)
+      OUTPUT INSERTED.Id INTO @seedReview
+      VALUES (@bookingId, @touristId, @guideId, @rating, @comment);
+      SELECT Id FROM @seedReview;
     `,
     review
   );
