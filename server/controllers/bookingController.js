@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+import sql, { query, getPool } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import { getIO } from '../utils/socket.js';
 import { notifyGuide } from '../utils/guideNotifications.js';
@@ -160,32 +160,6 @@ export const createBooking = async (req, res) => {
 
   const ratePerDay = Number(guideRow.DailyRate) || 0;
 
-  // Check for blocked dates in GuideAvailability
-  const blockedDatesSql = `
-    SELECT BlockedDate FROM GuideAvailability
-    WHERE GuideId = @guideId
-      AND BlockedDate >= @startDate
-      AND BlockedDate <= @endDate
-  `;
-  const blockedDates = await query(blockedDatesSql, { guideId: guideUserId, startDate, endDate });
-  if (blockedDates.length) {
-    const blocked = blockedDates.map(r => r.BlockedDate);
-    throw new AppError(
-      `Guide has blocked these dates: ${blocked.join(', ')}`,
-      409
-    );
-  }
-
-  // Check overlapping bookings (pending or confirmed)
-  const overlapSql = `
-    SELECT Id FROM Bookings
-    WHERE GuideId = @guideId
-      AND Status IN ('pending','confirmed')
-      AND NOT (EndDate < @startDate OR StartDate > @endDate)
-  `;
-  const overlapping = await query(overlapSql, { guideId: guideUserId, startDate, endDate });
-  if (overlapping.length) throw new AppError('Guide is already booked for the selected dates', 409);
-
   // Calculate total amount (inclusive days)
   const msPerDay = 24 * 60 * 60 * 1000;
   const days = Math.round((eDate - sDate) / msPerDay) + 1;
@@ -214,25 +188,58 @@ export const createBooking = async (req, res) => {
     notes: bookingNotes,
   };
 
+  const pool = await getPool();
+  const transaction = pool.transaction();
+  let transactionStarted = false;
+  let createdBooking;
   try {
-    const rows = await query(insertSql, params);
-    try {
-      const touristRows = await query('SELECT FullName FROM Users WHERE Id = @touristId', { touristId });
-      await notifyGuide({
-        guideId: guideUserId,
-        type: 'booking',
-        title: 'New booking request',
-        body: `${touristRows[0]?.FullName || 'A tourist'} requested a booking for ${new Date(startDate).toLocaleDateString()}.`,
-        linkUrl: '/bookings',
-      });
-    } catch (notificationError) {
-      console.error('[createBooking] Could not notify guide:', notificationError.message);
+    await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+    transactionStarted = true;
+    const runInTransaction = async (statement, values) => {
+      const request = transaction.request();
+      Object.entries(values).forEach(([key, value]) => request.input(key, value));
+      return (await request.query(statement)).recordset;
+    };
+
+    const blockedDates = await runInTransaction(
+      `SELECT BlockedDate FROM GuideAvailability WITH (UPDLOCK, HOLDLOCK)
+       WHERE GuideId = @guideId AND BlockedDate >= @startDate AND BlockedDate <= @endDate`,
+      { guideId: guideUserId, startDate, endDate }
+    );
+    if (blockedDates.length) {
+      throw new AppError(`Guide has blocked these dates: ${blockedDates.map((row) => row.BlockedDate).join(', ')}`, 409);
     }
-    res.status(201).json({ ok: true, booking: rows[0] });
+
+    const overlapping = await runInTransaction(
+      `SELECT Id FROM Bookings WITH (UPDLOCK, HOLDLOCK)
+       WHERE GuideId = @guideId AND Status IN ('pending', 'confirmed')
+         AND NOT (EndDate < @startDate OR StartDate > @endDate)`,
+      { guideId: guideUserId, startDate, endDate }
+    );
+    if (overlapping.length) throw new AppError('Guide is already booked for the selected dates', 409);
+
+    [createdBooking] = await runInTransaction(insertSql, params);
+    await transaction.commit();
   } catch (err) {
+    if (transactionStarted) await transaction.rollback().catch(() => {});
+    if (err instanceof AppError) throw err;
     console.error('[createBooking]', err);
     throw new AppError('Failed to create booking', 500);
   }
+
+  try {
+    const touristRows = await query('SELECT FullName FROM Users WHERE Id = @touristId', { touristId });
+    await notifyGuide({
+      guideId: guideUserId,
+      type: 'booking',
+      title: 'New booking request',
+      body: `${touristRows[0]?.FullName || 'A tourist'} requested a booking for ${new Date(startDate).toLocaleDateString()}.`,
+      linkUrl: '/bookings',
+    });
+  } catch (notificationError) {
+    console.error('[createBooking] Could not notify guide:', notificationError.message);
+  }
+  res.status(201).json({ ok: true, booking: createdBooking });
 };
 
 export function createUpdateBookingStatus(queryFn = query) {
