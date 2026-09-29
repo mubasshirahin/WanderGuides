@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, Plus, MapPin, Clock, DollarSign, Users, Eye, Trash2,
-  X, CheckCircle2, XCircle, ChevronRight, AlertCircle, Pencil, ToggleLeft, ToggleRight,
+  X, CheckCircle2, XCircle, ChevronRight, AlertCircle, Pencil, ToggleLeft, ToggleRight, MessageCircle,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser } from '../lib/demoAuth.js';
+import { startConversation } from '../lib/chat.js';
+import { useNavigate } from 'react-router-dom';
 
 const statusStyles = {
   pending: 'bg-amber-500/15 text-amber-400',
@@ -87,10 +89,25 @@ function ToastContainer({ toasts, onDismiss }) {
 
 /* ─── Create Tour Form ───────────────────────────────────── */
 
-function CreateTourForm({ onCreated, onClose }) {
-  const [form, setForm] = useState({
-    title: '', description: '', location: '', price: '', duration: '', maxGroupSize: '', imageUrl: '', category: '', difficulty: '', meetingPoint: '', highlights: '', itinerary: '',
-  });
+function itineraryToText(value) {
+  if (!value) return '';
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    if (Array.isArray(parsed)) return parsed.map((item) => item.details || item.title || '').filter(Boolean).join('\n');
+  } catch { /* existing plain-text itineraries are supported too */ }
+  return String(value);
+}
+
+function CreateTourForm({ onCreated, onClose, tour = null }) {
+  const [form, setForm] = useState(() => tour ? ({
+    title: tour.Title || '', description: tour.Description || '', location: tour.Location || '',
+    price: String(tour.Price ?? ''), duration: String(Math.max(1, Math.ceil(Number(tour.DurationHours || 8) / 8))),
+    maxGroupSize: String(tour.MaxGroupSize || 10), imageUrl: tour.ImageUrl || '', category: tour.Category || '',
+    difficulty: tour.Difficulty || '', meetingPoint: tour.MeetingPoint || '', highlights: tour.Highlights || '',
+    included: tour.Included || '', itinerary: itineraryToText(tour.Itinerary),
+  }) : ({
+    title: '', description: '', location: '', price: '', duration: '', maxGroupSize: '', imageUrl: '', category: '', difficulty: '', meetingPoint: '', highlights: '', included: '', itinerary: '',
+  }));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -103,8 +120,8 @@ function CreateTourForm({ onCreated, onClose }) {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await authFetch('/api/guide/tours', {
-        method: 'POST',
+      const res = await authFetch(tour ? `/api/guide/tours/${tour.Id}` : '/api/guide/tours', {
+        method: tour ? 'PUT' : 'POST',
         body: JSON.stringify({
           ...form,
           price: Number(form.price),
@@ -114,7 +131,7 @@ function CreateTourForm({ onCreated, onClose }) {
         }),
       });
       const data = await res.json();
-      if (!data.ok) throw new Error(data.message || 'Failed to create tour');
+      if (!data.ok) throw new Error(data.message || `Failed to ${tour ? 'update' : 'create'} tour`);
       onCreated(data.tour);
       onClose();
     } catch (err) {
@@ -181,6 +198,12 @@ function CreateTourForm({ onCreated, onClose }) {
           className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-400" />
       </div>
       <div>
+        <label className="block text-sm font-medium text-slate-300 mb-1">What's included (one item per line)</label>
+        <textarea name="included" value={form.included} onChange={handleChange} rows={3} maxLength={2000}
+          placeholder={'Local guide\nEntry tickets\nDrinking water'}
+          className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-400" />
+      </div>
+      <div>
         <label className="block text-sm font-medium text-slate-300 mb-1">Itinerary (one activity per line)</label>
         <textarea name="itinerary" value={form.itinerary} onChange={handleChange} rows={4} maxLength={3000} placeholder={'Day 1: Old town walking tour\nLunch at a local restaurant\nSunset viewpoint'}
           className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-400" />
@@ -222,7 +245,7 @@ function CreateTourForm({ onCreated, onClose }) {
         <button type="submit" disabled={submitting}
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Create Tour
+          {tour ? 'Save Changes' : 'Create Tour'}
         </button>
       </div>
     </form>
@@ -232,10 +255,12 @@ function CreateTourForm({ onCreated, onClose }) {
 /* ─── Main Page ──────────────────────────────────────────── */
 
 export default function MyToursAndBookingsPage() {
+  const navigate = useNavigate();
   const [tours, setTours] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingTour, setEditingTour] = useState(null);
 
   const [drawerTour, setDrawerTour] = useState(null);
   const [responses, setResponses] = useState([]);
@@ -277,6 +302,21 @@ export default function MyToursAndBookingsPage() {
   const handleCreated = (tour) => {
     setTours(prev => [tour, ...prev]);
     addToast('Tour created successfully!', 'success');
+  };
+
+  const handleUpdated = (tour) => {
+    setTours((current) => current.map((item) => item.Id === tour.Id ? { ...item, ...tour } : item));
+    setEditingTour(null);
+    addToast('Tour listing updated.', 'success');
+  };
+
+  const messageTourist = async (touristId) => {
+    try {
+      const conversation = await startConversation(touristId);
+      navigate(`/messages?conversation=${conversation.conversationId}`);
+    } catch (err) {
+      addToast(err.message || 'Could not start a conversation.', 'error');
+    }
   };
 
   const toggleActive = async (tour) => {
@@ -457,6 +497,10 @@ export default function MyToursAndBookingsPage() {
               </div>
 
               <div className="flex flex-wrap gap-2 pt-3 border-t border-white/5">
+                <button onClick={() => setEditingTour(tour)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/[0.1] transition-colors">
+                  <Pencil className="h-3.5 w-3.5" /> Edit listing
+                </button>
                 <button onClick={() => openResponses(tour)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/[0.1] transition-colors">
                   <Eye className="h-3.5 w-3.5" />
@@ -485,6 +529,9 @@ export default function MyToursAndBookingsPage() {
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create New Tour">
         <CreateTourForm onCreated={handleCreated} onClose={() => setShowCreate(false)} />
+      </Modal>
+      <Modal open={!!editingTour} onClose={() => setEditingTour(null)} title="Edit Tour Listing">
+        {editingTour && <CreateTourForm tour={editingTour} onCreated={handleUpdated} onClose={() => setEditingTour(null)} />}
       </Modal>
 
       {/* Responses Drawer */}
@@ -530,7 +577,9 @@ export default function MyToursAndBookingsPage() {
                     {Number(r.TotalAmount).toFixed(2)}
                   </p>
                 )}
+                {r.PaymentStatus && <p className="mb-3 text-xs text-slate-400">Payment: <span className="capitalize text-slate-200">{r.PaymentStatus}</span></p>}
                 {r.Notes && <p className="text-xs text-slate-400 mb-3">{r.Notes}</p>}
+                {r.TouristUserId && <button onClick={() => messageTourist(r.TouristUserId)} className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-500/15 px-3 py-1.5 text-xs font-semibold text-brand-300 hover:bg-brand-500/25"><MessageCircle className="h-3.5 w-3.5" />Message tourist</button>}
                 {r.Status === 'pending' && (
                   <div className="flex gap-2">
                     <button onClick={() => acceptResponse(r)}

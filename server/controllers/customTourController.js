@@ -1,6 +1,7 @@
 import { query, getPool } from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import { getIO } from '../utils/socket.js';
+import { notifyGuide } from '../utils/guideNotifications.js';
 
 /**
  * POST /api/custom-tours
@@ -32,6 +33,19 @@ export async function createRequest(req, res) {
     const io = getIO();
     io.to('guides').emit('custom_tour:new', { request });
   } catch (_) { /* socket not critical */ }
+
+  try {
+    const guideRows = await query('SELECT UserID FROM Guides WHERE IsActive = 1 AND UserID IS NOT NULL');
+    await Promise.all(guideRows.map(({ UserID }) => notifyGuide({
+      guideId: UserID,
+      type: 'custom_request',
+      title: 'New custom tour request',
+      body: `${request.Title} in ${request.Destination} · budget ৳${Number(request.Budget).toFixed(0)}`,
+      linkUrl: '/custom-requests',
+    })));
+  } catch (notificationError) {
+    console.error('[createRequest] Could not notify guides:', notificationError.message);
+  }
 
   res.status(201).json({ ok: true, request });
 }

@@ -20,6 +20,7 @@ import GuideDashboardPage from './pages/GuideDashboardPage.jsx';
 import MyToursAndBookingsPage from './pages/MyToursAndBookingsPage.jsx';
 import GuideCustomRequestsPage from './pages/GuideCustomRequestsPage.jsx';
 import GuideProfileCalendarPage from './pages/GuideProfileCalendarPage.jsx';
+import GuideVerificationPage from './pages/GuideVerificationPage.jsx';
 import ProtectedLayout from './components/ProtectedLayout.jsx';
 import { login, register, googleLogin, logout, getStoredUser, fetchCurrentUser } from './lib/demoAuth.js';
 
@@ -115,6 +116,7 @@ export default function App({ googleEnabled = false }) {
             <Route path="guides" element={<GuidesPage role={role} />} />
             {role === 'admin' && <Route path="guides/new" element={<GuideFormPage />} />}
             {role === 'admin' && <Route path="guides/:id/edit" element={<GuideFormPage />} />}
+            {role === 'admin' && <Route path="guide-verifications" element={<GuideVerificationPage />} />}
             <Route path="bookings" element={<BookingsPage role={role} />} />
             <Route path="dashboard" element={
               role === 'tourist' ? <TouristDashboard /> :

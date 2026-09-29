@@ -6,6 +6,10 @@ import {
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch, getStoredUser } from '../lib/demoAuth.js';
 import { Link } from 'react-router-dom';
+import { io } from 'socket.io-client';
+import { Bell, MessageCircle } from 'lucide-react';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 const statusStyles = {
   pending: 'bg-amber-500/15 text-amber-400',
@@ -40,6 +44,7 @@ export default function GuideDashboardPage() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notifications, setNotifications] = useState([]);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -57,6 +62,28 @@ export default function GuideDashboardPage() {
   }, []);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  useEffect(() => {
+    let active = true;
+    authFetch('/api/guide/notifications').then((res) => res.json()).then((json) => {
+      if (active && json.ok) setNotifications(json.notifications || []);
+    }).catch(() => {});
+    const token = sessionStorage.getItem('wg_token');
+    if (!token) return () => { active = false; };
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket', 'polling'] });
+    socket.on('guide_notification:new', (notification) => {
+      setNotifications((items) => [notification, ...items.filter((item) => item.Id !== notification.Id)].slice(0, 30));
+    });
+    return () => { active = false; socket.disconnect(); };
+  }, []);
+
+  const markNotificationRead = async (id) => {
+    try {
+      const response = await authFetch(`/api/guide/notifications/${id}/read`, { method: 'PUT' });
+      const json = await response.json();
+      if (json.ok) setNotifications((items) => items.map((item) => item.Id === id ? { ...item, IsRead: true } : item));
+    } catch { /* keep the notification unread until it can be saved */ }
+  };
 
   const name = user?.FullName || user?.fullName || 'Guide';
   const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -140,7 +167,31 @@ export default function GuideDashboardPage() {
           <div className="mb-8 grid gap-4 sm:grid-cols-2">
             <MetricCard icon={DollarSign} label="Completed bookings marked paid" value={`৳${Number(dashboard.stats?.paidEarnings || 0).toFixed(2)}`} color="text-emerald-400" />
             <MetricCard icon={Clock} label="Completed bookings marked unpaid" value={`৳${Number(dashboard.stats?.unpaidEarnings || 0).toFixed(2)}`} color="text-amber-400" />
+            <MetricCard icon={Clock} label="Expected from upcoming bookings" value={`৳${Number(dashboard.stats?.upcomingPayments || 0).toFixed(2)}`} color="text-sky-400" />
           </div>
+
+          <section className="mb-8 rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="flex items-center gap-2 text-lg font-bold text-white"><Bell className="h-5 w-5 text-brand-400" />Notifications</h3>
+              <span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs text-brand-300">{notifications.filter((item) => !item.IsRead).length} unread</span>
+            </div>
+            {notifications.length === 0 ? <p className="text-sm text-slate-400">New bookings, tourist messages, and custom tour requests will appear here.</p> : (
+              <div className="space-y-2">
+                {notifications.slice(0, 6).map((item) => (
+                  <div key={item.Id} className={`flex items-start justify-between gap-3 rounded-xl p-3 ${item.IsRead ? 'bg-white/[0.03]' : 'bg-brand-500/[0.08]'}`}>
+                    <div className="flex items-start gap-3">
+                      {item.Type === 'message' ? <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" /> : <Bell className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" />}
+                      <div><p className="text-sm font-semibold text-white">{item.Title}</p><p className="mt-1 text-xs text-slate-400">{item.Body}</p><p className="mt-1 text-[11px] text-slate-500">{formatDate(item.CreatedAt)}</p></div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      {item.LinkUrl && <Link to={item.LinkUrl} className="text-xs text-brand-300 hover:text-white">Open</Link>}
+                      {!item.IsRead && <button onClick={() => markNotificationRead(item.Id)} className="text-xs text-brand-300 hover:text-white">Mark read</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
           {((dashboard.stats?.pendingBookings || dashboard.recentBookings?.some((b) => b.Status === 'pending')) || dashboard.pendingRequests?.length > 0) && (
             <div className="mb-8 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-5">

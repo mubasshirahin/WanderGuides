@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Edit, Trash2, MapPin, Star, Languages, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, MapPin, Star, Languages, Loader2, ShieldCheck } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
 
@@ -151,7 +151,7 @@ export default function GuidesPage({ role }) {
                 {filtered.map(g => (
                   <tr key={g.Id} className="hover:bg-white/[0.03] transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-white">{g.FullName}</div>
+                      <div className="flex items-center gap-2 font-medium text-white">{g.FullName}{g.IsVerified && <span title="Identity verified" className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300"><ShieldCheck className="h-3 w-3" />Verified</span>}</div>
                       <div className="text-xs text-slate-400">{g.Email}</div>
                     </td>
                     <td className="px-4 py-3 flex items-center gap-1.5 text-slate-300">

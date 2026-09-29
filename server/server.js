@@ -15,6 +15,8 @@ import bidRoutes from './routes/bidRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import guideTourRoutes from './routes/guideTourRoutes.js';
 import guideAvailabilityRoutes from './routes/guideAvailabilityRoutes.js';
+import guideNotificationRoutes from './routes/guideNotificationRoutes.js';
+import guideVerificationRoutes from './routes/guideVerificationRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import { initSocket } from './utils/socket.js';
 
@@ -39,6 +41,8 @@ app.use('/api/bids', bidRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/guide', guideTourRoutes);
 app.use('/api/guide-availability', guideAvailabilityRoutes);
+app.use('/api/guide/notifications', guideNotificationRoutes);
+app.use('/api/guide-verifications', guideVerificationRoutes);
 
 app.get('/', (_req, res) => {
   res.json({ ok: true, name: 'Tourist Guide Hiring Platform API', status: 'running' });
