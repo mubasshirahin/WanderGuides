@@ -77,7 +77,7 @@ export const getAllBookings = async (req, res) => {
   res.json({ ok: true, bookings });
 };
 
-/** POST /api/bookings - placeholder. Validate availability + insert here. */
+/** POST /api/bookings - create a booking after validating availability. */
 export const createBooking = async (req, res) => {
   const { guideId, tourId, startDate, endDate, notes } = req.body || {};
   const groupSize = Number(req.body?.groupSize || 1);
@@ -318,3 +318,56 @@ export function createUpdateBookingStatus(queryFn = query) {
 }
 
 export const updateBookingStatus = createUpdateBookingStatus();
+
+export function createUpdatePaymentStatus(queryFn = query) {
+  return async function updatePaymentStatus(req, res) {
+    const bookingId = parseBookingId(req.params && req.params.id);
+    const userId = Number(req.user?.id);
+    const role = req.user?.role;
+    const nextStatus = String(req.body?.paymentStatus || '').trim().toLowerCase();
+    if (!userId) throw new AppError('Unauthorized', 401);
+    if (!['guide', 'admin'].includes(role)) throw new AppError('Forbidden', 403);
+    if (!['paid', 'refunded'].includes(nextStatus)) throw new AppError('Invalid payment status', 400);
+
+    const rows = await queryFn(
+      'SELECT Id, GuideId, Status, PaymentStatus FROM Bookings WHERE Id = @bookingId',
+      { bookingId }
+    );
+    const booking = rows[0];
+    if (!booking) throw new AppError('Booking not found', 404);
+    const currentStatus = String(booking.PaymentStatus || 'unpaid').toLowerCase();
+    if (String(booking.Status).toLowerCase() === 'cancelled') {
+      throw new AppError('Cancelled bookings cannot change payment status', 400);
+    }
+
+    if (role === 'guide') {
+      if (Number(booking.GuideId) !== userId) throw new AppError('Forbidden', 403);
+    }
+    if (currentStatus === nextStatus) return res.json({ ok: true, paymentStatus: currentStatus });
+
+    if (role === 'guide') {
+      if (nextStatus !== 'paid' || currentStatus !== 'unpaid') {
+        throw new AppError('Guides can only mark an unpaid booking as paid', 403);
+      }
+      if (!['confirmed', 'completed'].includes(String(booking.Status).toLowerCase())) {
+        throw new AppError('Only confirmed or completed bookings can be marked paid', 400);
+      }
+    } else if (nextStatus === 'refunded' && currentStatus !== 'paid') {
+      throw new AppError('Only paid bookings can be refunded', 400);
+    } else if (nextStatus === 'paid' && currentStatus !== 'unpaid') {
+      throw new AppError('Only unpaid bookings can be marked paid', 400);
+    }
+
+    const updated = await queryFn(
+      `UPDATE Bookings
+       SET PaymentStatus = @nextStatus
+       OUTPUT INSERTED.Id, INSERTED.PaymentStatus
+       WHERE Id = @bookingId AND PaymentStatus = @currentStatus`,
+      { bookingId, nextStatus, currentStatus }
+    );
+    if (!updated.length) throw new AppError('Payment status changed; refresh and try again', 409);
+    res.json({ ok: true, paymentStatus: updated[0].PaymentStatus });
+  };
+}
+
+export const updatePaymentStatus = createUpdatePaymentStatus();

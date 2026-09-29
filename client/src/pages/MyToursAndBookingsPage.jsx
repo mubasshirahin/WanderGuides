@@ -421,6 +421,23 @@ export default function MyToursAndBookingsPage() {
     }
   };
 
+  const markPaymentReceived = async (response) => {
+    try {
+      const res = await authFetch(`/api/bookings/${response.BookingId || response.Id}/payment-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ paymentStatus: 'paid' }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message || 'Could not update payment status');
+      setResponses(prev => prev.map(r =>
+        r.Id === response.Id ? { ...r, PaymentStatus: data.paymentStatus } : r
+      ));
+      addToast('Payment marked as received.', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -578,6 +595,12 @@ export default function MyToursAndBookingsPage() {
                   </p>
                 )}
                 {r.PaymentStatus && <p className="mb-3 text-xs text-slate-400">Payment: <span className="capitalize text-slate-200">{r.PaymentStatus}</span></p>}
+                {r.PaymentStatus === 'unpaid' && ['confirmed', 'completed'].includes(r.Status) && (
+                  <button onClick={() => markPaymentReceived(r)}
+                    className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Mark payment received
+                  </button>
+                )}
                 {r.Notes && <p className="text-xs text-slate-400 mb-3">{r.Notes}</p>}
                 {r.TouristUserId && <button onClick={() => messageTourist(r.TouristUserId)} className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-500/15 px-3 py-1.5 text-xs font-semibold text-brand-300 hover:bg-brand-500/25"><MessageCircle className="h-3.5 w-3.5" />Message tourist</button>}
                 {r.Status === 'pending' && (
