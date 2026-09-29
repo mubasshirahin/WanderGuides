@@ -53,6 +53,23 @@ export default function BookingsPage({ role }) {
     }
   };
 
+  const updatePaymentStatus = async (booking, paymentStatus) => {
+    if (paymentStatus === 'refunded' && !window.confirm(`Mark booking #${booking.Id} as refunded?`)) return;
+    try {
+      const res = await authFetch(`/api/bookings/${booking.Id}/payment-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ paymentStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not update payment status');
+      setBookings((current) => current.map((item) => item.Id === booking.Id
+        ? { ...item, PaymentStatus: data.paymentStatus }
+        : item));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const messageOtherParty = async (booking) => {
     try {
       const otherUserId = role === 'guide' ? booking.TouristUserId : booking.GuideId;
@@ -104,7 +121,8 @@ export default function BookingsPage({ role }) {
                   <th className="px-4 py-3">{role === 'admin' ? 'Tourist → Guide' : role === 'guide' ? 'Tourist' : 'Guide'}</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Total</th>
-                  {['tourist', 'guide'].includes(role) && <th className="px-4 py-3 text-right">Actions</th>}
+                  <th className="px-4 py-3">Payment</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -146,15 +164,14 @@ export default function BookingsPage({ role }) {
                         {Number(b.TotalAmount).toFixed(2)}
                       </span>
                     </td>
-                    {['tourist', 'guide'].includes(role) && (
-                      <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-xs capitalize text-slate-300">{b.PaymentStatus || 'unpaid'}</td>
+                    <td className="px-4 py-3 text-right">
                         <div className="inline-flex items-center gap-2">
-                          <button
+                          {['tourist', 'guide'].includes(role) && <button
                             onClick={() => messageOtherParty(b)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10"
-                          >
+                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10">
                             <MessageCircle className="h-3.5 w-3.5" /> Message
-                          </button>
+                          </button>}
                           {role === 'tourist' && ['pending', 'confirmed'].includes(String(b.Status).toLowerCase()) && (
                             <button
                               onClick={() => cancelBooking(b)}
@@ -172,9 +189,14 @@ export default function BookingsPage({ role }) {
                           {role === 'guide' && b.Status === 'confirmed' && (
                             <button onClick={() => updateBooking(b, 'completed')} className="rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">Complete</button>
                           )}
+                          {role === 'guide' && ['confirmed', 'completed'].includes(String(b.Status).toLowerCase()) && b.PaymentStatus === 'unpaid' && (
+                            <button onClick={() => updatePaymentStatus(b, 'paid')} className="rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">Mark paid</button>
+                          )}
+                          {role === 'admin' && b.PaymentStatus === 'paid' && (
+                            <button onClick={() => updatePaymentStatus(b, 'refunded')} className="rounded-lg bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-500/20">Refund</button>
+                          )}
                         </div>
-                      </td>
-                    )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
