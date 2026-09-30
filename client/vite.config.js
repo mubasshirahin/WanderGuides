@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // Keep the OAuth origin stable; fail instead of silently switching to 5174.
+    strictPort: true,
     proxy: {
       // Proxy API calls to the Express backend during dev.
       '/api': 'http://localhost:5050',
