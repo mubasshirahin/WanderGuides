@@ -38,7 +38,7 @@ export async function getDashboard(req, res) {
   // 2. Next upcoming tour (earliest pending/confirmed booking)
   const nextTourRows = await query(
     `SELECT TOP 1
-       b.Id, b.TourId, b.GroupSize, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
+       b.Id, b.GuideId, b.TourId, b.GroupSize, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
        DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) AS CancellationDeadline,
        CASE WHEN SYSUTCDATETIME() < DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS CanCancel,
        gt.Title AS TourTitle, gt.Itinerary, gt.MeetingPoint, gt.Location AS TourLocation,
@@ -60,7 +60,7 @@ export async function getDashboard(req, res) {
   // 3. All bookings (for tabbed list)
   const bookingsRows = await query(
     `SELECT
-       b.Id, b.TourId, b.GroupSize, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
+       b.Id, b.GuideId, b.TourId, b.GroupSize, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.PaymentStatus, b.Notes, b.CreatedAt,
        DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) AS CancellationDeadline,
        CASE WHEN SYSUTCDATETIME() < DATEADD(HOUR, -48, CAST(b.StartDate AS DATETIME2)) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS CanCancel,
        gt.Title AS TourTitle, gt.Itinerary, gt.MeetingPoint, gt.Location AS TourLocation,

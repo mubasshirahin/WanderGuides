@@ -58,15 +58,17 @@ export const getAllBookings = async (req, res) => {
     : '1=1';
   const sql = `
     SELECT
-      Id, TouristUserId, GuideId, TourId, GroupSize, StartDate, EndDate,
-      Status, TotalAmount, PaymentStatus, Notes, CreatedAt,
-      CancellationDeadline, CanCancel, TourTitle, Itinerary, MeetingPoint,
-      TourLocation, TourImageUrl, TouristName, TouristEmail,
-      GuideName, GuideEmail, GuidePhone, GuideAvatarUrl, GuideBio
-    FROM dbo.vw_BookingDetails
+      v.Id, v.TouristUserId, v.GuideId, v.TourId, v.GroupSize, v.StartDate, v.EndDate,
+      v.Status, v.TotalAmount, v.PaymentStatus, v.Notes, v.CreatedAt,
+      v.CancellationDeadline, v.CanCancel, v.TourTitle, v.Itinerary, v.MeetingPoint,
+      v.TourLocation, v.TourImageUrl, v.TouristName, v.TouristEmail,
+      v.GuideName, v.GuideEmail, v.GuidePhone, v.GuideAvatarUrl, v.GuideBio,
+      CASE WHEN r.Id IS NOT NULL THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS HasReview
+    FROM dbo.vw_BookingDetails v
+    LEFT JOIN dbo.Reviews r ON r.BookingId = v.Id
     WHERE ${whereClause}
-      AND (@status IS NULL OR Status = @status)
-    ORDER BY CreatedAt DESC, Id DESC
+      AND (@status IS NULL OR v.Status = @status)
+    ORDER BY v.CreatedAt DESC, v.Id DESC
   `;
 
   const bookings = await query(sql, {

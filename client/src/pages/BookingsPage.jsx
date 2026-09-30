@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, DollarSign, Loader2, User, MessageCircle, XCircle } from 'lucide-react';
+import { CalendarDays, DollarSign, Loader2, Star, User, MessageCircle, XCircle } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
 import { startConversation } from '../lib/chat.js';
@@ -132,7 +132,7 @@ export default function BookingsPage({ role }) {
                       <div className="font-medium text-white">
                         <span className="inline-flex items-center gap-1.5">
                           <CalendarDays className="h-4 w-4 text-brand-400" />
-                          Booking #{b.Id}
+                          {b.TourTitle || `Booking #${b.Id}`}
                         </span>
                       </div>
                       {b.Notes && <div className="text-xs text-slate-400 mt-0.5">{b.Notes}</div>}
@@ -188,6 +188,20 @@ export default function BookingsPage({ role }) {
                           )}
                           {role === 'guide' && b.Status === 'confirmed' && (
                             <button onClick={() => updateBooking(b, 'completed')} className="rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">Complete</button>
+                          )}
+                          {role === 'tourist' && String(b.Status).toLowerCase() === 'completed' && (
+                            b.HasReview ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-xs font-medium text-amber-300">
+                                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> Reviewed
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => navigate(`/reviews?write=1&booking=${b.Id}`)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 px-2.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
+                              >
+                                <Star className="h-3.5 w-3.5" /> Rate
+                              </button>
+                            )
                           )}
                           {role === 'guide' && ['confirmed', 'completed'].includes(String(b.Status).toLowerCase()) && b.PaymentStatus === 'unpaid' && (
                             <button onClick={() => updatePaymentStatus(b, 'paid')} className="rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">Mark paid</button>

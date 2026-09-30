@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createGuide, listGuides, getGuideEx, updateGuide, deleteGuide, exploreGuides, updateGuideProfile, getTopRatedGuides, browseTours, checkTourAvailability } from '../controllers/guideController.js';
-import { getGuideReviews } from '../controllers/reviewController.js';
+import { getGuideReviews, createGuideReview } from '../controllers/reviewController.js';
 import { recordTourView } from '../controllers/guideTourController.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import auth from '../middleware/auth.js';
@@ -18,6 +18,9 @@ router.get('/tours/:tourId/availability', asyncHandler(checkTourAvailability));
 router.get('/top-rated', asyncHandler(getTopRatedGuides));    // GET top-rated guides by city (GROUP BY + HAVING)
 router.get('/:id', asyncHandler(getGuideEx));            // READ one (with reviews)
 router.get('/:id/reviews', asyncHandler(getGuideReviews));  // GET guide reviews
+// Open-review aliases (same handler as POST /api/reviews/guide — tour lage na)
+router.post('/reviews', auth, requireRole('tourist'), asyncHandler(createGuideReview));
+router.post('/:id/reviews', auth, requireRole('tourist'), asyncHandler(createGuideReview));
 router.patch('/:id', auth, requireRole('guide', 'admin'), asyncHandler(updateGuide));       // UPDATE (admin/guide)
 router.put('/profile', auth, requireRole('guide'), validate(guideSelfProfileSchema), asyncHandler(updateGuideProfile)); // UPDATE own listing (guide)
 router.delete('/:id', auth, requireRole('admin'), asyncHandler(deleteGuide));      // DELETE (admin)
