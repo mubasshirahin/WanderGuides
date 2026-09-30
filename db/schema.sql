@@ -9,7 +9,9 @@ CREATE TABLE Users (
     FullName    NVARCHAR(100) NOT NULL,
     Email       NVARCHAR(150) NOT NULL UNIQUE,
     PasswordHash NVARCHAR(255) NOT NULL,
-    Role        NVARCHAR(20) NOT NULL CHECK (Role IN ('tourist', 'guide')),
+    Role        NVARCHAR(20) NOT NULL CONSTRAINT CK_Users_Role CHECK (Role IN ('tourist', 'guide', 'admin')),
+    Provider    NVARCHAR(20) NOT NULL CONSTRAINT DF_Users_Provider DEFAULT 'local',
+    ProviderId  NVARCHAR(255) NULL,
     Phone       NVARCHAR(30) NULL,
     AvatarUrl   NVARCHAR(500) NULL,
     Bio         NVARCHAR(MAX) NULL,
@@ -23,6 +25,7 @@ CREATE INDEX IX_Users_Email ON Users(Email);
 
 -- Index on Role for filtering by account type
 CREATE INDEX IX_Users_Role ON Users(Role);
+CREATE UNIQUE INDEX UX_Users_ProviderId ON Users(Provider, ProviderId) WHERE ProviderId IS NOT NULL;
 
 -- =============================================
 -- Bookings Table Schema
@@ -57,12 +60,14 @@ CREATE INDEX IX_Bookings_Status ON Bookings(Status);
 
 -- =============================================
 -- Reviews Table Schema
--- One review per booking enforced by UNIQUE constraint on BookingId
+-- Booking-based review (BookingId NOT NULL, one per booking) +
+-- Open review from Explore view (BookingId NULL, one per tourist per guide,
+--   tour complete na korleo je keo rating/review dite parbe)
 -- =============================================
 
 CREATE TABLE Reviews (
     Id           INT IDENTITY PRIMARY KEY,
-    BookingId    INT NOT NULL,
+    BookingId    INT NULL,
     TouristUserId INT NOT NULL,
     GuideId      INT NOT NULL,
     Rating       TINYINT NOT NULL CHECK (Rating >= 1 AND Rating <= 5),
@@ -73,9 +78,13 @@ CREATE TABLE Reviews (
 
     CONSTRAINT FK_Reviews_Booking FOREIGN KEY (BookingId) REFERENCES Bookings(Id),
     CONSTRAINT FK_Reviews_Tourist FOREIGN KEY (TouristUserId) REFERENCES Users(Id),
-    CONSTRAINT FK_Reviews_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id),
-    CONSTRAINT UQ_Reviews_Booking UNIQUE (BookingId)
+    CONSTRAINT FK_Reviews_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id)
 );
+
+-- One review per booking (only for booking-based reviews)
+CREATE UNIQUE INDEX UQ_Reviews_Booking ON Reviews(BookingId) WHERE BookingId IS NOT NULL;
+-- Open reviews (BookingId NULL): protibar notun row add hoy, tai ekhane
+-- kono UNIQUE index nai — ek tourist ek guide ke multiple review dite parbe.
 
 CREATE INDEX IX_Reviews_Guide ON Reviews(GuideId);
 CREATE INDEX IX_Reviews_Tourist ON Reviews(TouristUserId);

@@ -8,39 +8,48 @@ import AppError from '../utils/AppError.js';
  */
 export const getConversations = async (req, res) => {
   const userId = req.user && req.user.id;
-  const role = req.user && req.user.role;
 
   if (!userId) throw new AppError('Unauthorized', 401);
 
-  const otherRole = role === 'tourist' ? 'guide' : 'tourist';
-  const myIdCol = role === 'tourist' ? 'TouristID' : 'GuideID';
-  const otherIdCol = role === 'tourist' ? 'GuideID' : 'TouristID';
-
+  // Role-agnostic: user jekono side (tourist/guide) hok, tar sob conversation.
+  // Age role diye TouristID/GuideID column beche neoa hoto — token e role
+  // missing/vul thakle guide tar conversation dekhte peto na. Ekhon CASE diye
+  // other-user resolve kora hoy, tai role er upor nirvorota nei.
+  // Legacy safety: kono purono row te GuideID/TouristID te Guides.Id (profile)
+  // dhuke thakle setao current user er Guides.UserID mapping diye dhora hoy,
+  //jate tourist er pathano thread guide er inbox e ase.
+  // Other-user age direct Users match (du), na pele Guides link (gu) theke.
   const conversations = await query(
     `SELECT
        c.ConversationID,
        c.LastMessage,
        c.LastMessageAt,
-       u.Id AS OtherUserId,
-       u.FullName AS OtherUserName,
-       u.Email AS OtherUserEmail,
-       u.AvatarUrl AS OtherUserAvatar,
-       u.Role AS OtherUserRole,
+       COALESCE(du.Id, gu.Id) AS OtherUserId,
+       COALESCE(du.FullName, gu.FullName) AS OtherUserName,
+       COALESCE(du.Email, gu.Email) AS OtherUserEmail,
+       COALESCE(du.AvatarUrl, gu.AvatarUrl) AS OtherUserAvatar,
+       COALESCE(du.Role, gu.Role) AS OtherUserRole,
        ISNULL(unread.TotalUnread, 0) AS UnreadCount
      FROM Conversations c
-     INNER JOIN Users u ON u.Id = c.${otherIdCol}
+     LEFT JOIN Users du ON du.Id = CASE WHEN c.TouristID = @userId THEN c.GuideID ELSE c.TouristID END
+     LEFT JOIN Guides gOther ON gOther.Id = CASE WHEN c.TouristID = @userId THEN c.GuideID ELSE c.TouristID END
+     LEFT JOIN Users gu ON gu.Id = gOther.UserID
      LEFT JOIN (
        SELECT ConversationID, COUNT(*) AS TotalUnread
        FROM Messages
        WHERE ReceiverID = @userId AND IsRead = 0
        GROUP BY ConversationID
      ) unread ON unread.ConversationID = c.ConversationID
-     WHERE c.${myIdCol} = @userId
+     WHERE c.TouristID = @userId OR c.GuideID = @userId
+        OR c.GuideID IN (SELECT Id FROM Guides WHERE UserID = @userId)
+        OR c.TouristID IN (SELECT Id FROM Guides WHERE UserID = @userId)
      ORDER BY c.LastMessageAt DESC, c.ConversationID DESC`,
     { userId }
   );
 
-  const normalized = conversations.map((row) => ({
+  const normalized = conversations
+    .filter((row) => row.OtherUserId != null)
+    .map((row) => ({
     conversationId: row.ConversationID,
     lastMessage: row.LastMessage,
     lastMessageAt: row.LastMessageAt,
@@ -84,8 +93,15 @@ export const getMessages = async (req, res) => {
   if (!convoRows.length) throw new AppError('Conversation not found', 404);
 
   const convo = convoRows[0];
-  if (Number(convo.TouristID) !== Number(userId) && Number(convo.GuideID) !== Number(userId)) {
-    throw new AppError('Forbidden', 403);
+  const isDirectMember =
+    Number(convo.TouristID) === Number(userId) || Number(convo.GuideID) === Number(userId);
+  if (!isDirectMember) {
+    // Legacy row te GuideID/TouristID te Guides.Id dhuke thakle profile mapping diye allow.
+    const profileRows = await query('SELECT Id FROM Guides WHERE UserID = @userId', { userId });
+    const profileIds = new Set(profileRows.map((r) => Number(r.Id)));
+    if (!profileIds.has(Number(convo.TouristID)) && !profileIds.has(Number(convo.GuideID))) {
+      throw new AppError('Forbidden', 403);
+    }
   }
 
   const messages = await query(
@@ -134,7 +150,7 @@ export const getMessages = async (req, res) => {
     senderId: row.SenderID,
     senderName: row.SenderName,
     senderAvatar: row.SenderAvatar,
-    isMine: row.SenderID === userId,
+    isMine: Number(row.SenderID) === Number(userId),
   }));
 
   res.json({ ok: true, messages: normalized, hasMore, nextBeforeId });
@@ -145,38 +161,71 @@ export const getMessages = async (req, res) => {
  * Starts a new conversation between a tourist and a guide, or retrieves an existing one.
  */
 export const startConversation = async (req, res) => {
-  const userId = req.user && req.user.id;
-  const role = req.user && req.user.role;
-  const { otherUserId } = req.body || {};
+  const userId = Number(req.user && req.user.id);
+  const requestedId = Number(req.body?.otherUserId);
 
   if (!userId) throw new AppError('Unauthorized', 401);
-  if (!otherUserId) throw new AppError('otherUserId is required', 400);
-
-  let touristId, guideId;
-  if (role === 'tourist') {
-    touristId = userId;
-    guideId = otherUserId;
-  } else if (role === 'guide') {
-    touristId = otherUserId;
-    guideId = userId;
-  } else {
-    throw new AppError('Only tourists and guides can chat', 403);
+  if (!Number.isSafeInteger(requestedId) || requestedId < 1) {
+    throw new AppError('otherUserId is required', 400);
   }
-
-  if (touristId === guideId) {
+  if (requestedId === userId) {
     throw new AppError('Cannot start a conversation with yourself', 400);
   }
 
-  const otherRows = await query(
-    'SELECT Id, Role, FullName, AvatarUrl FROM Users WHERE Id = @otherUserId',
-    { otherUserId }
+  // Nijer role DB theke nao — token e role missing/stale thakleo thik thakbe.
+  const meRows = await query(
+    'SELECT Id, Role FROM Users WHERE Id = @userId',
+    { userId }
   );
-  if (!otherRows.length) throw new AppError('User not found', 404);
+  if (!meRows.length) throw new AppError('Unauthorized', 401);
+  const myRole = meRows[0].Role;
+  if (!['tourist', 'guide'].includes(myRole)) {
+    throw new AppError('Only tourists and guides can chat', 403);
+  }
+  const oppositeRole = myRole === 'tourist' ? 'guide' : 'tourist';
 
-  const otherUser = otherRows[0];
-  const expectedRole = role === 'tourist' ? 'guide' : 'tourist';
-  if (otherUser.Role !== expectedRole) {
-    throw new AppError(`Cannot start conversation with another ${role}`, 400);
+  // Other-user resolve.
+  // Client sadharonoto Users.Id pathay, kintu kokhono Guides.Id (profile)
+  // aste pare. Guides.Id ar Users.Id overlap kore (duita identity 1 theke),
+  // tai role check chara Users match nile vul manusher sathe conversation
+  // toiri hoy — tourist message pathalo, asol guide kichu dekhlo na.
+  // Tai: Users row tokhoni nebo jokhon tar Role opposite; noyto Guides
+  // mapping (g.Id -> u.Id) theke nebo.
+  const userRows = await query(
+    'SELECT Id, Role, FullName, AvatarUrl FROM Users WHERE Id = @requestedId',
+    { requestedId }
+  );
+  const guideLinkRows = await query(
+    `SELECT u.Id, u.Role, u.FullName, u.AvatarUrl
+     FROM Guides g
+     INNER JOIN Users u ON u.Id = g.UserID
+     WHERE g.Id = @requestedId`,
+    { requestedId }
+  );
+  const directMatch = userRows.find((r) => r.Role === oppositeRole) || null;
+  const linkedMatch = guideLinkRows.find((r) => r.Role === oppositeRole) || null;
+  // Tourist -> guide: current client ra Users.Id pathay, tai direct age.
+  // Guide -> tourist: tourist er Guides row thake na, direct e lagbe.
+  const otherUser = directMatch || linkedMatch || null;
+  if (!otherUser) {
+    if (userRows.length || guideLinkRows.length) {
+      throw new AppError(`Cannot start conversation with another ${myRole}`, 400);
+    }
+    throw new AppError('User not found', 404);
+  }
+
+  const otherUserId = Number(otherUser.Id);
+  if (otherUserId === userId) {
+    throw new AppError('Cannot start a conversation with yourself', 400);
+  }
+
+  let touristId, guideId;
+  if (myRole === 'tourist') {
+    touristId = userId;
+    guideId = otherUserId;
+  } else {
+    touristId = otherUserId;
+    guideId = userId;
   }
 
   let convoRows = await query(

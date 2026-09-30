@@ -38,22 +38,46 @@ export async function getPublicProfile(req, res) {
   );
   const stats = statsRows[0] || { completedTours: 0, totalBookings: 0 };
 
-  // Reviews from guides
-  const reviewsRows = await query(
-    `SELECT r.Rating, r.Comment, r.CreatedAt,
-            g.FullName AS GuideName, g.AvatarUrl AS GuideAvatar
-     FROM GuideReviewsOfTourists r
-     INNER JOIN Users g ON g.Id = r.GuideID
-     WHERE r.TouristID = @userId
-     ORDER BY r.CreatedAt DESC`,
-    { userId }
-  );
+  // Reviews given by this tourist to guides (one-way: tourist -> guide only).
+  // Guides never review tourists. Live DB (ReviewerId/RevieweeId) vs schema.sql — 207 fallback.
+  let reviewsRows;
+  try {
+    reviewsRows = await query(
+      `SELECT r.Rating, r.Comment, r.CreatedAt,
+              g.FullName AS GuideName, g.AvatarUrl AS GuideAvatar
+       FROM Reviews r
+       INNER JOIN Users g ON g.Id = r.GuideId
+       WHERE r.TouristUserId = @userId
+       ORDER BY r.CreatedAt DESC`,
+      { userId }
+    );
+  } catch (err) {
+    if (err?.number !== 207) throw err;
+    reviewsRows = await query(
+      `SELECT r.Rating, r.Comment, r.CreatedAt,
+              g.FullName AS GuideName, g.AvatarUrl AS GuideAvatar
+       FROM Reviews r
+       INNER JOIN Users g ON g.Id = r.RevieweeId
+       WHERE r.ReviewerId = @userId AND r.ReviewerRole = 'tourist'
+       ORDER BY r.CreatedAt DESC`,
+      { userId }
+    );
+  }
 
-  // Total reviews count
-  const reviewCountRows = await query(
-    'SELECT COUNT(*) AS totalReviews FROM GuideReviewsOfTourists WHERE TouristID = @userId',
-    { userId }
-  );
+  // Total reviews count (given by tourist)
+  let reviewCountRows;
+  try {
+    reviewCountRows = await query(
+      'SELECT COUNT(*) AS totalReviews FROM Reviews WHERE TouristUserId = @userId',
+      { userId }
+    );
+  } catch (err) {
+    if (err?.number !== 207) throw err;
+    reviewCountRows = await query(
+      `SELECT COUNT(*) AS totalReviews FROM Reviews WHERE ReviewerId = @userId AND ReviewerRole = 'tourist'`,
+      { userId }
+    );
+  }
 
   res.json({
     ok: true,
@@ -112,16 +136,30 @@ export async function getMyProfile(req, res) {
     { userId }
   );
 
-  // Reviews from guides
-  const reviewsRows = await query(
-    `SELECT r.Rating, r.Comment, r.CreatedAt,
-            g.FullName AS GuideName, g.AvatarUrl AS GuideAvatar
-     FROM GuideReviewsOfTourists r
-     INNER JOIN Users g ON g.Id = r.GuideID
-     WHERE r.TouristID = @userId
-     ORDER BY r.CreatedAt DESC`,
-    { userId }
-  );
+  // Reviews given by this tourist to guides (one-way: tourist -> guide only)
+  let reviewsRows;
+  try {
+    reviewsRows = await query(
+      `SELECT r.Rating, r.Comment, r.CreatedAt,
+              g.FullName AS GuideName, g.AvatarUrl AS GuideAvatar
+       FROM Reviews r
+       INNER JOIN Users g ON g.Id = r.GuideId
+       WHERE r.TouristUserId = @userId
+       ORDER BY r.CreatedAt DESC`,
+      { userId }
+    );
+  } catch (err) {
+    if (err?.number !== 207) throw err;
+    reviewsRows = await query(
+      `SELECT r.Rating, r.Comment, r.CreatedAt,
+              g.FullName AS GuideName, g.AvatarUrl AS GuideAvatar
+       FROM Reviews r
+       INNER JOIN Users g ON g.Id = r.RevieweeId
+       WHERE r.ReviewerId = @userId AND r.ReviewerRole = 'tourist'
+       ORDER BY r.CreatedAt DESC`,
+      { userId }
+    );
+  }
 
   // Check if linked to Google
   const isGoogleLinked = userRows[0].Email && false; // simplified — no GoogleID column in existing schema

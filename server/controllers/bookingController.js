@@ -53,20 +53,22 @@ export const getAllBookings = async (req, res) => {
   // Course topic VIEW: vari JOIN ta db/views.sql -> vw_BookingDetails e rakha.
   // Controller ekhon sudhu view theke filter kore.
   const whereClause =
-    role === 'guide' ? 'GuideId = @userId'
-    : role === 'tourist' ? 'TouristUserId = @userId'
+    role === 'guide' ? 'v.GuideId = @userId'
+    : role === 'tourist' ? 'v.TouristUserId = @userId'
     : '1=1';
   const sql = `
     SELECT
-      Id, TouristUserId, GuideId, TourId, GroupSize, StartDate, EndDate,
-      Status, TotalAmount, PaymentStatus, Notes, CreatedAt,
-      CancellationDeadline, CanCancel, TourTitle, Itinerary, MeetingPoint,
-      TourLocation, TourImageUrl, TouristName, TouristEmail,
-      GuideName, GuideEmail, GuidePhone, GuideAvatarUrl, GuideBio
-    FROM dbo.vw_BookingDetails
+      v.Id, v.TouristUserId, v.GuideId, v.TourId, v.GroupSize, v.StartDate, v.EndDate,
+      v.Status, v.TotalAmount, v.PaymentStatus, v.Notes, v.CreatedAt,
+      v.CancellationDeadline, v.CanCancel, v.TourTitle, v.Itinerary, v.MeetingPoint,
+      v.TourLocation, v.TourImageUrl, v.TouristName, v.TouristEmail,
+      v.GuideName, v.GuideEmail, v.GuidePhone, v.GuideAvatarUrl, v.GuideBio,
+      CASE WHEN r.Id IS NOT NULL THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS HasReview
+    FROM dbo.vw_BookingDetails v
+    LEFT JOIN dbo.Reviews r ON r.BookingId = v.Id
     WHERE ${whereClause}
-      AND (@status IS NULL OR Status = @status)
-    ORDER BY CreatedAt DESC, Id DESC
+      AND (@status IS NULL OR v.Status = @status)
+    ORDER BY v.CreatedAt DESC, v.Id DESC
   `;
 
   const bookings = await query(sql, {
@@ -77,7 +79,7 @@ export const getAllBookings = async (req, res) => {
   res.json({ ok: true, bookings });
 };
 
-/** POST /api/bookings - placeholder. Validate availability + insert here. */
+/** POST /api/bookings - create a booking after validating availability. */
 export const createBooking = async (req, res) => {
   const { guideId, tourId, startDate, endDate, notes } = req.body || {};
   const groupSize = Number(req.body?.groupSize || 1);
@@ -318,3 +320,56 @@ export function createUpdateBookingStatus(queryFn = query) {
 }
 
 export const updateBookingStatus = createUpdateBookingStatus();
+
+export function createUpdatePaymentStatus(queryFn = query) {
+  return async function updatePaymentStatus(req, res) {
+    const bookingId = parseBookingId(req.params && req.params.id);
+    const userId = Number(req.user?.id);
+    const role = req.user?.role;
+    const nextStatus = String(req.body?.paymentStatus || '').trim().toLowerCase();
+    if (!userId) throw new AppError('Unauthorized', 401);
+    if (!['guide', 'admin'].includes(role)) throw new AppError('Forbidden', 403);
+    if (!['paid', 'refunded'].includes(nextStatus)) throw new AppError('Invalid payment status', 400);
+
+    const rows = await queryFn(
+      'SELECT Id, GuideId, Status, PaymentStatus FROM Bookings WHERE Id = @bookingId',
+      { bookingId }
+    );
+    const booking = rows[0];
+    if (!booking) throw new AppError('Booking not found', 404);
+    const currentStatus = String(booking.PaymentStatus || 'unpaid').toLowerCase();
+    if (String(booking.Status).toLowerCase() === 'cancelled') {
+      throw new AppError('Cancelled bookings cannot change payment status', 400);
+    }
+
+    if (role === 'guide') {
+      if (Number(booking.GuideId) !== userId) throw new AppError('Forbidden', 403);
+    }
+    if (currentStatus === nextStatus) return res.json({ ok: true, paymentStatus: currentStatus });
+
+    if (role === 'guide') {
+      if (nextStatus !== 'paid' || currentStatus !== 'unpaid') {
+        throw new AppError('Guides can only mark an unpaid booking as paid', 403);
+      }
+      if (!['confirmed', 'completed'].includes(String(booking.Status).toLowerCase())) {
+        throw new AppError('Only confirmed or completed bookings can be marked paid', 400);
+      }
+    } else if (nextStatus === 'refunded' && currentStatus !== 'paid') {
+      throw new AppError('Only paid bookings can be refunded', 400);
+    } else if (nextStatus === 'paid' && currentStatus !== 'unpaid') {
+      throw new AppError('Only unpaid bookings can be marked paid', 400);
+    }
+
+    const updated = await queryFn(
+      `UPDATE Bookings
+       SET PaymentStatus = @nextStatus
+       OUTPUT INSERTED.Id, INSERTED.PaymentStatus
+       WHERE Id = @bookingId AND PaymentStatus = @currentStatus`,
+      { bookingId, nextStatus, currentStatus }
+    );
+    if (!updated.length) throw new AppError('Payment status changed; refresh and try again', 409);
+    res.json({ ok: true, paymentStatus: updated[0].PaymentStatus });
+  };
+}
+
+export const updatePaymentStatus = createUpdatePaymentStatus();

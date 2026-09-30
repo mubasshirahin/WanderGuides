@@ -358,7 +358,7 @@ export async function getGuideDashboard(req, res) {
   // Recent bookings
   const recentBookings = await query(
     `SELECT TOP 5
-       b.Id, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.CreatedAt,
+       b.Id, b.TouristUserId, b.StartDate, b.EndDate, b.Status, b.TotalAmount, b.CreatedAt,
        u.FullName AS TouristName, u.AvatarUrl AS TouristAvatar
      FROM Bookings b
      INNER JOIN Users u ON u.Id = b.TouristUserId

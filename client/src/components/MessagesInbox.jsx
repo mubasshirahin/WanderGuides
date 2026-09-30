@@ -42,8 +42,20 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
   const socketRef = useRef(null);
   const textInputRef = useRef(null);
   const currentUserId = currentUser?.id ?? currentUser?.Id;
+  // Socket handler closure stale hoye gele notun message active thread e
+  // add hoto na — tai active conversation + list er ref mirror rakha holo.
+  const activeConversationIdRef = useRef(null);
+  const conversationsRef = useRef([]);
 
-  const activeConversation = conversations.find((c) => c.conversationId === activeConversationId) || null;
+  const activeConversation = conversations.find((c) => Number(c.conversationId) === Number(activeConversationId)) || null;
+
+  const setConversationsSynced = (updater) => {
+    setConversations((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      conversationsRef.current = next;
+      return next;
+    });
+  };
 
   const fetchConversations = useCallback(async () => {
     setLoadingConversations(true);
@@ -54,9 +66,10 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
       const res = await authFetch('/api/chat/conversations', { signal: controller.signal });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.message || 'Failed to load conversations');
-      setConversations(data.conversations || []);
+      setConversationsSynced(data.conversations || []);
       const requestedId = Number(initialConversationId);
       if (requestedId && data.conversations?.some((conversation) => Number(conversation.conversationId) === requestedId)) {
+        activeConversationIdRef.current = requestedId;
         setActiveConversationId(requestedId);
       }
     } catch (err) {
@@ -123,6 +136,10 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
   }, [activeConversationId, fetchMessages]);
 
   useEffect(() => {
+    activeConversationIdRef.current = activeConversationId ? Number(activeConversationId) : null;
+  }, [activeConversationId]);
+
+  useEffect(() => {
     if (!currentUserId) return;
 
     const socket = io(SOCKET_URL, {
@@ -144,49 +161,55 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
 
     socket.on('receive_message', (message) => {
       const userId = currentUserId;
+      const incomingConversationId = Number(message.conversationId);
+      const currentActiveId = activeConversationIdRef.current != null
+        ? Number(activeConversationIdRef.current)
+        : null;
       const isForCurrentConversation =
-        activeConversationId && message.conversationId === activeConversationId;
+        currentActiveId != null && incomingConversationId === currentActiveId;
 
       if (isForCurrentConversation) {
         setMessages((prev) => {
-          if (prev.some((m) => m.messageId === message.messageId)) return prev;
-          return [...prev, { ...message, isMine: message.senderId === userId }];
+          if (prev.some((m) => Number(m.messageId) === Number(message.messageId))) return prev;
+          return [...prev, { ...message, conversationId: incomingConversationId, isMine: Number(message.senderId) === Number(userId) }];
         });
       }
 
-      setConversations((prev) => {
-        const exists = prev.some((c) => c.conversationId === message.conversationId);
-        if (!exists) {
-          fetchConversations();
-          return prev;
-        }
-        return prev
+      const exists = conversationsRef.current.some(
+        (c) => Number(c.conversationId) === incomingConversationId
+      );
+      if (!exists) {
+        fetchConversations();
+        return;
+      }
+      setConversationsSynced((prev) =>
+        prev
           .map((c) =>
-            c.conversationId === message.conversationId
+            Number(c.conversationId) === incomingConversationId
               ? {
                   ...c,
                   lastMessage: message.text,
                   lastMessageAt: message.createdAt,
-                  unreadCount: isForCurrentConversation ? 0 : c.unreadCount + 1,
+                  unreadCount: isForCurrentConversation ? 0 : Number(c.unreadCount || 0) + 1,
                 }
               : c
           )
-          .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
-      });
+          .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
+      );
     });
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [currentUserId, activeConversationId, SOCKET_URL, fetchConversations]);
+  }, [currentUserId, SOCKET_URL, fetchConversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSelectConversation = (conversationId) => {
-    setActiveConversationId(conversationId);
+    setActiveConversationId(Number(conversationId));
   };
 
   const handleSend = async (e) => {
@@ -204,13 +227,13 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
 
       if (result?.ok) {
         setMessages((prev) => {
-          if (prev.some((m) => m.messageId === result.message.messageId)) return prev;
+          if (prev.some((m) => Number(m.messageId) === Number(result.message.messageId))) return prev;
           return [...prev, { ...result.message, isMine: true }];
         });
-        setConversations((prev) =>
+        setConversationsSynced((prev) =>
           prev
             .map((c) =>
-              c.conversationId === activeConversationId
+              Number(c.conversationId) === Number(activeConversationId)
                 ? { ...c, lastMessage: messageText, lastMessageAt: new Date().toISOString() }
                 : c
             )
@@ -287,7 +310,7 @@ export default function MessagesInbox({ currentUser, initialConversationId }) {
                   key={convo.conversationId}
                   onClick={() => handleSelectConversation(convo.conversationId)}
                   className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5 ${
-                    activeConversationId === convo.conversationId ? 'bg-brand-500/10' : ''
+                    Number(activeConversationId) === Number(convo.conversationId) ? 'bg-brand-500/10' : ''
                   }`}
                 >
                   <div className="relative flex-shrink-0">

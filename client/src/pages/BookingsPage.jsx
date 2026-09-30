@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, DollarSign, Loader2, User, MessageCircle, XCircle } from 'lucide-react';
+import { CalendarDays, DollarSign, Loader2, Star, User, MessageCircle, XCircle } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { authFetch } from '../lib/demoAuth.js';
 import { startConversation } from '../lib/chat.js';
@@ -48,6 +48,23 @@ export default function BookingsPage({ role }) {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.message || 'Could not update booking');
       setBookings((current) => current.map((item) => item.Id === booking.Id ? { ...item, Status: status } : item));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const updatePaymentStatus = async (booking, paymentStatus) => {
+    if (paymentStatus === 'refunded' && !window.confirm(`Mark booking #${booking.Id} as refunded?`)) return;
+    try {
+      const res = await authFetch(`/api/bookings/${booking.Id}/payment-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ paymentStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Could not update payment status');
+      setBookings((current) => current.map((item) => item.Id === booking.Id
+        ? { ...item, PaymentStatus: data.paymentStatus }
+        : item));
     } catch (err) {
       setError(err.message);
     }
@@ -104,7 +121,8 @@ export default function BookingsPage({ role }) {
                   <th className="px-4 py-3">{role === 'admin' ? 'Tourist → Guide' : role === 'guide' ? 'Tourist' : 'Guide'}</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Total</th>
-                  {['tourist', 'guide'].includes(role) && <th className="px-4 py-3 text-right">Actions</th>}
+                  <th className="px-4 py-3">Payment</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -114,7 +132,7 @@ export default function BookingsPage({ role }) {
                       <div className="font-medium text-white">
                         <span className="inline-flex items-center gap-1.5">
                           <CalendarDays className="h-4 w-4 text-brand-400" />
-                          Booking #{b.Id}
+                          {b.TourTitle || `Booking #${b.Id}`}
                         </span>
                       </div>
                       {b.Notes && <div className="text-xs text-slate-400 mt-0.5">{b.Notes}</div>}
@@ -146,15 +164,14 @@ export default function BookingsPage({ role }) {
                         {Number(b.TotalAmount).toFixed(2)}
                       </span>
                     </td>
-                    {['tourist', 'guide'].includes(role) && (
-                      <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-xs capitalize text-slate-300">{b.PaymentStatus || 'unpaid'}</td>
+                    <td className="px-4 py-3 text-right">
                         <div className="inline-flex items-center gap-2">
-                          <button
+                          {['tourist', 'guide'].includes(role) && <button
                             onClick={() => messageOtherParty(b)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10"
-                          >
+                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10">
                             <MessageCircle className="h-3.5 w-3.5" /> Message
-                          </button>
+                          </button>}
                           {role === 'tourist' && ['pending', 'confirmed'].includes(String(b.Status).toLowerCase()) && (
                             <button
                               onClick={() => cancelBooking(b)}
@@ -172,9 +189,28 @@ export default function BookingsPage({ role }) {
                           {role === 'guide' && b.Status === 'confirmed' && (
                             <button onClick={() => updateBooking(b, 'completed')} className="rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">Complete</button>
                           )}
+                          {role === 'tourist' && String(b.Status).toLowerCase() === 'completed' && (
+                            b.HasReview ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-xs font-medium text-amber-300">
+                                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> Reviewed
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => navigate(`/reviews?write=1&booking=${b.Id}`)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 px-2.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
+                              >
+                                <Star className="h-3.5 w-3.5" /> Rate
+                              </button>
+                            )
+                          )}
+                          {role === 'guide' && ['confirmed', 'completed'].includes(String(b.Status).toLowerCase()) && b.PaymentStatus === 'unpaid' && (
+                            <button onClick={() => updatePaymentStatus(b, 'paid')} className="rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">Mark paid</button>
+                          )}
+                          {role === 'admin' && b.PaymentStatus === 'paid' && (
+                            <button onClick={() => updatePaymentStatus(b, 'refunded')} className="rounded-lg bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-500/20">Refund</button>
+                          )}
                         </div>
-                      </td>
-                    )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

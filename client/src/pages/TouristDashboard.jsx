@@ -1,35 +1,25 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { startConversation } from '../lib/chat.js';
 import {
-  LayoutDashboard, CalendarDays, MapPin, DollarSign, Star, Clock,
-  CheckCircle, XCircle, Loader2, Phone, MessageSquare, X, Menu,
-  Search, ChevronRight, ChevronLeft, AlertTriangle, User, Bell, Users, ExternalLink
+  LayoutDashboard, CalendarDays, MapPin, Star, Clock,
+  CheckCircle2, XCircle, Loader2, Phone, MessageSquare, X, Menu,
+  ChevronRight, ChevronLeft, TriangleAlert, User, Bell, Users, ExternalLink,
+  Wallet, Plane, TicketCheck, RefreshCw,
+  BadgeCheck, Navigation, CircleDot
 } from 'lucide-react';
 import { authFetch } from '../lib/demoAuth.js';
-import { io } from 'socket.io-client';
+import { handleImgError, getInitials } from '../lib/avatar.js';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
-
-const TABS = [
-  { key: 'active', label: 'Active', icon: Clock },
-  { key: 'past', label: 'Past', icon: CheckCircle },
-  { key: 'cancelled', label: 'Cancelled', icon: XCircle },
-];
-
-const statusStyles = {
-  pending: 'bg-amber-500/15 text-amber-400',
-  confirmed: 'bg-sky-500/15 text-sky-400',
-  completed: 'bg-emerald-500/15 text-emerald-400',
-  cancelled: 'bg-rose-500/15 text-rose-400',
+const statusMeta = {
+  pending: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+  confirmed: 'border-sky-400/30 bg-sky-400/10 text-sky-300',
+  completed: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+  cancelled: 'border-rose-400/30 bg-rose-400/10 text-rose-300',
 };
 
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
 function formatDate(d) {
+  if (!d) return '—';
   return new Date(d).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
   });
@@ -47,11 +37,8 @@ export default function TouristDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('active');
   const [cancellingId, setCancellingId] = useState(null);
-  const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -70,26 +57,6 @@ export default function TouristDashboard() {
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
-  useEffect(() => {
-    let active = true;
-    authFetch('/api/tourist/notifications').then((res) => res.json()).then((json) => {
-      if (active && json.ok) setNotifications(json.notifications || []);
-    }).catch(() => {});
-    const token = sessionStorage.getItem('wg_token');
-    if (!token) return () => { active = false; };
-    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket', 'polling'] });
-    socket.on('notification:new', (notification) => setNotifications((items) => [notification, ...items.filter((item) => item.Id !== notification.Id)].slice(0, 30)));
-    return () => { active = false; socket.disconnect(); };
-  }, []);
-
-  const markNotificationRead = async (id) => {
-    try {
-      const response = await authFetch(`/api/tourist/notifications/${id}/read`, { method: 'PUT' });
-      const json = await response.json();
-      if (json.ok) setNotifications((items) => items.map((item) => item.Id === id ? { ...item, IsRead: true } : item));
-    } catch { /* refreshed the next time the dashboard loads */ }
-  };
-
   const handleCancel = async (bookingId) => {
     if (!window.confirm('Are you sure you want to cancel this booking?')) return;
     setCancellingId(bookingId);
@@ -100,9 +67,6 @@ export default function TouristDashboard() {
       const json = await res.json();
       if (!json.ok) throw new Error(json.message || 'Cancel failed');
       await fetchDashboard();
-      const notificationsResponse = await authFetch('/api/tourist/notifications');
-      const notificationsJson = await notificationsResponse.json();
-      if (notificationsJson.ok) setNotifications(notificationsJson.notifications || []);
     } catch (e) {
       alert(e.message);
     } finally {
@@ -110,32 +74,29 @@ export default function TouristDashboard() {
     }
   };
 
-  // Filter bookings by tab
-  const filterBookings = (bookings) => {
-    if (!bookings) return [];
-    return bookings.filter((b) => {
-      if (activeTab === 'active') return b.Status === 'pending' || b.Status === 'confirmed';
-      if (activeTab === 'past') return b.Status === 'completed';
-      if (activeTab === 'cancelled') return b.Status === 'cancelled';
-      return true;
-    });
-  };
-
-  const filteredBookings = filterBookings(data?.bookings).filter((b) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (b.GuideName || '').toLowerCase().includes(q) ||
-      (b.Notes || '').toLowerCase().includes(q) ||
-      (b.GuideCity || '').toLowerCase().includes(q)
-    );
-  });
-
-  // ─── Loading ──────────────────────────────────────────────
+  // ─── Loading skeleton ─────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="hidden w-72 shrink-0 lg:block">
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
+            <div className="h-24 animate-pulse bg-gradient-to-r from-brand-500/30 via-teal-500/20 to-accent-500/20" />
+            <div className="space-y-3 p-6">
+              <div className="mx-auto h-16 w-16 animate-pulse rounded-2xl bg-white/10" />
+              <div className="mx-auto h-4 w-32 animate-pulse rounded bg-white/10" />
+              <div className="mx-auto h-3 w-24 animate-pulse rounded bg-white/5" />
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 space-y-5">
+          <div className="h-44 animate-pulse rounded-3xl border border-white/10 bg-white/[0.04]" />
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {[0,1,2,3].map(i => <div key={i} className="h-32 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />)}
+          </div>
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-7 w-7 animate-spin text-brand-400" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -143,160 +104,164 @@ export default function TouristDashboard() {
   // ─── Error ────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-300">
-        {error}
-        <button onClick={fetchDashboard} className="ml-3 underline hover:text-red-200">Retry</button>
+      <div className="mx-auto max-w-lg rounded-3xl border border-rose-500/30 bg-rose-500/10 p-8 text-center backdrop-blur-xl">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-300">
+          <TriangleAlert className="h-6 w-6" />
+        </span>
+        <h2 className="mt-4 font-display text-lg font-bold text-white">Couldn&apos;t load your dashboard</h2>
+        <p className="mt-1 text-sm text-rose-200/80">{error}</p>
+        <button onClick={fetchDashboard} className="btn-sheen mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-teal-500 px-5 py-2.5 text-sm font-bold text-white">
+          <RefreshCw className="h-4 w-4" /> Try again
+        </button>
       </div>
     );
   }
 
-  const { user, stats, nextTour, bookings } = data || {};
+  const { user, stats = {}, nextTour, bookings = [] } = data || {};
+  const safeStats = {
+    totalBookings: stats.totalBookings ?? 0,
+    upcomingTours: stats.upcomingTours ?? 0,
+    completedTours: stats.completedTours ?? 0,
+    totalSpent: stats.totalSpent ?? 0,
+  };
   const confirmedBooking = bookings?.find((booking) => booking.Status === 'confirmed');
+  const completionRate = safeStats.totalBookings > 0 ? Math.round((safeStats.completedTours / safeStats.totalBookings) * 100) : 0;
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] gap-0">
-      {/* ─── Mobile Sidebar Overlay ──────────────────────── */}
+    <div className="relative">
+      {/* Mobile sidebar drawer */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-72 bg-ink-950 border-r border-white/10 p-6 overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-display text-lg font-bold text-white">Menu</h2>
-              <button onClick={() => setSidebarOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="h-5 w-5" />
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-[19rem] overflow-y-auto border-r border-white/10 bg-ink-950 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="flex items-center gap-2 font-display text-sm font-bold text-white">
+                <LayoutDashboard className="h-4 w-4 text-brand-400" /> Traveler menu
+              </p>
+              <button onClick={() => setSidebarOpen(false)} className="rounded-lg border border-white/10 p-1.5 text-slate-400 hover:text-white" aria-label="Close menu">
+                <X className="h-4 w-4" />
               </button>
             </div>
-            <SidebarContent user={user} stats={stats} />
+            <SidebarContent user={user} stats={safeStats} completionRate={completionRate} onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}
 
-      {/* ─── Desktop Sidebar ─────────────────────────────── */}
-      <aside className="hidden md:block w-64 shrink-0 border-r border-white/10 bg-white/[0.02] p-6">
-        <SidebarContent user={user} stats={stats} />
-      </aside>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        {/* ─── Desktop sidebar ─── */}
+        <aside className="hidden w-72 shrink-0 lg:block">
+          <div className="sticky top-24">
+            <SidebarContent user={user} stats={safeStats} completionRate={completionRate} />
+          </div>
+        </aside>
 
-      {/* ─── Main Content ────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
-        {/* Mobile header bar */}
-        <div className="flex items-center gap-3 border-b border-white/10 bg-white/[0.02] px-4 py-3 md:hidden">
-          <button onClick={() => setSidebarOpen(true)} className="text-slate-400 hover:text-white">
-            <Menu className="h-5 w-5" />
-          </button>
-          <h1 className="font-display text-base font-bold text-white">Dashboard</h1>
-        </div>
-
-        <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-          {/* ─── Header ──────────────────────────────────── */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="font-display text-2xl font-extrabold text-white sm:text-3xl">
-                {getGreeting()}, {user?.FullName?.split(' ')[0] || 'Traveler'}
-              </h1>
-              <p className="mt-1 text-sm text-slate-400">Here&apos;s what&apos;s happening with your tours.</p>
-            </div>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search bookings..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.06] py-2.5 pl-10 pr-4 text-sm text-white outline-none transition-all placeholder:text-slate-500 focus:border-brand-400 focus:ring-4 focus:ring-brand-500/15 sm:w-72"
-              />
-            </div>
+        {/* ─── Main ─── */}
+        <main className="min-w-0 flex-1 space-y-6">
+          {/* Mobile top bar */}
+          <div className="flex items-center gap-3 lg:hidden">
+            <button onClick={() => setSidebarOpen(true)} className="rounded-xl border border-white/10 bg-white/[0.06] p-2.5 text-slate-300" aria-label="Open menu">
+              <Menu className="h-5 w-5" />
+            </button>
+            <p className="font-display text-base font-bold text-white">My Dashboard</p>
           </div>
 
-          {/* ─── Metric Cards ────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <MetricCard icon={CalendarDays} label="Total Bookings" value={stats.totalBookings} color="text-brand-400" />
-            <MetricCard icon={Clock} label="Upcoming Tours" value={stats.upcomingTours} color="text-sky-400" />
-            <MetricCard icon={CheckCircle} label="Completed" value={stats.completedTours} color="text-emerald-400" />
-            <MetricCard icon={DollarSign} label="Total Spent" value={`৳${Number(stats.totalSpent).toFixed(2)}`} color="text-accent-400" />
+          {/* ─── Metric cards ─── */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <MetricCard icon={TicketCheck} label="Total bookings" value={safeStats.totalBookings} sub={`${safeStats.upcomingTours} upcoming`} gradient="from-brand-500 to-emerald-600" shadow="shadow-brand-500/25" />
+            <MetricCard icon={Clock} label="Upcoming tours" value={safeStats.upcomingTours} sub="On your calendar" gradient="from-sky-500 to-cyan-600" shadow="shadow-sky-500/25" />
+            <MetricCard icon={BadgeCheck} label="Completed" value={safeStats.completedTours} sub={`${completionRate}% completion`} gradient="from-teal-500 to-emerald-600" shadow="shadow-teal-500/25" />
+            <MetricCard icon={Wallet} label="Total spent" value={`৳${Number(safeStats.totalSpent).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} sub="Across all trips" gradient="from-accent-500 to-orange-600" shadow="shadow-accent-500/25" />
           </div>
 
-          {/* ─── Priority Banner: Next Upcoming Tour ─────── */}
+          {/* ─── Inline alerts ─── */}
           {confirmedBooking && (
-            <div className="flex items-start gap-3 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4 text-sm text-emerald-100" role="status">
-              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-              <p><strong>Booking confirmed:</strong> {confirmedBooking.GuideName} confirmed your trip for {formatDate(confirmedBooking.StartDate)}. Review the details below.</p>
+            <div className="flex items-start gap-3 rounded-2xl border border-emerald-400/25 bg-gradient-to-r from-emerald-500/15 to-teal-500/10 p-4 text-sm text-emerald-100" role="status">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300">
+                <CheckCircle2 className="h-4 w-4" />
+              </span>
+              <p className="leading-relaxed"><strong className="font-bold text-white">Booking confirmed:</strong> {confirmedBooking.GuideName} confirmed your trip for {formatDate(confirmedBooking.StartDate)}. Manage it from the Bookings page.</p>
             </div>
           )}
           {nextTour && daysUntil(nextTour.StartDate) >= 0 && daysUntil(nextTour.StartDate) <= 7 && (
-            <div className="flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100" role="status">
-              <Bell className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-              <p><strong>Trip reminder:</strong> your tour with {nextTour.GuideName} is {daysUntil(nextTour.StartDate) === 0 ? 'today' : `in ${daysUntil(nextTour.StartDate)} day(s)`}. Check the date and coordinate with your guide.</p>
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-400/25 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-4 text-sm text-amber-100" role="status">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300">
+                <Bell className="h-4 w-4" />
+              </span>
+              <p className="leading-relaxed"><strong className="font-bold text-white">Trip reminder:</strong> your tour with {nextTour.GuideName} is {daysUntil(nextTour.StartDate) === 0 ? 'today' : `in ${daysUntil(nextTour.StartDate)} day(s)`}. Coordinate pickup with your guide.</p>
             </div>
           )}
+
+          {/* ─── Next tour spotlight ─── */}
           {nextTour && <NextTourBanner tour={nextTour} onCancel={handleCancel} cancellingId={cancellingId} />}
-          <BookingCalendar bookings={bookings || []} />
-          <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <div className="mb-3 flex items-center justify-between"><h2 className="font-display text-lg font-bold text-white">Notifications</h2><span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs text-brand-300">{notifications.filter((item) => !item.IsRead).length} unread</span></div>
-            {notifications.length === 0 ? <p className="text-sm text-slate-400">Booking updates and guide messages will appear here.</p> : <div className="space-y-2">{notifications.slice(0, 5).map((item) => <div key={item.Id} className={`flex items-start justify-between gap-3 rounded-xl p-3 ${item.IsRead ? 'bg-white/[0.03]' : 'bg-brand-500/[0.08]'}`}><div><p className="text-sm font-semibold text-white">{item.Title}</p><p className="mt-1 text-xs text-slate-400">{item.Body}</p></div>{!item.IsRead && <button onClick={() => markNotificationRead(item.Id)} className="shrink-0 text-xs text-brand-300 hover:text-white">Mark read</button>}</div>)}</div>}
-          </section>
 
-          {/* ─── Tabbed Booking List ─────────────────────── */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl overflow-hidden">
-            {/* Tabs */}
-            <div className="flex border-b border-white/10 overflow-x-auto">
-              {TABS.map(({ key, label, icon: Icon }) => {
-                const count = filterBookings(bookings).filter((b) => {
-                  if (key === 'active') return b.Status === 'pending' || b.Status === 'confirmed';
-                  if (key === 'past') return b.Status === 'completed';
-                  if (key === 'cancelled') return b.Status === 'cancelled';
-                  return false;
-                }).length;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setActiveTab(key)}
-                    className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-colors whitespace-nowrap ${
-                      activeTab === key
-                        ? 'text-brand-400 border-b-2 border-brand-400'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                    <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      activeTab === key ? 'bg-brand-500/20 text-brand-300' : 'bg-white/10 text-slate-500'
-                    }`}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Booking list */}
-            <div className="divide-y divide-white/5">
-              {filteredBookings.length === 0 && (
-                <div className="px-6 py-12 text-center">
-                  <CalendarDays className="mx-auto mb-3 h-8 w-8 text-slate-500" />
-                  <p className="text-sm text-slate-400">
-                    {activeTab === 'active' && 'No active bookings.'}
-                    {activeTab === 'past' && 'No completed bookings yet.'}
-                    {activeTab === 'cancelled' && 'No cancelled bookings.'}
-                  </p>
-                </div>
-              )}
-              {filteredBookings.map((b) => (
-                <BookingRow
-                  key={b.Id}
-                  booking={b}
-                  onCancel={handleCancel}
-                  cancellingId={cancellingId}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </main>
+          {/* ─── Trip calendar ─── */}
+          <BookingCalendar bookings={bookings} />
+        </main>
+      </div>
     </div>
   );
 }
 
-// ─── Sidebar Content ──────────────────────────────────────────
+// ─── Sidebar ──────────────────────────────────────────────────
+function SidebarContent({ user, stats, completionRate = 0, onNavigate }) {
+  return (
+    <div className="space-y-4" onClick={onNavigate}>
+      {/* Profile card */}
+      <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl">
+        <div className="px-5 pb-5 pt-5">
+          <div className="mb-3 flex justify-center">
+            <div className="h-[4.5rem] w-[4.5rem] overflow-hidden rounded-3xl bg-ink-950 p-1 ring-2 ring-brand-400/60 shadow-xl shadow-brand-500/20">
+              <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[1.1rem] bg-gradient-to-br from-brand-500 to-teal-600 font-display text-xl font-extrabold text-white">
+                <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+                  {getInitials(user?.FullName || 'Traveler')}
+                </span>
+                {user?.AvatarUrl && (
+                  <img src={user.AvatarUrl} alt={user?.FullName || 'Traveler'} onError={(e) => handleImgError(e, user?.FullName)} className="absolute inset-0 h-full w-full object-cover" />
+                )}
+              </div>
+            </div>
+          </div>
+          <p className="text-center font-display text-[15px] font-extrabold text-white">{user?.FullName || 'Traveler'}</p>
+          <p className="mt-0.5 truncate text-center text-[11px] text-slate-500">{user?.Email || ''}</p>
+
+          {/* Journey progress */}
+          <div className="mt-4 rounded-2xl border border-white/10 bg-ink-950/50 p-3.5">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-bold uppercase tracking-wider text-slate-400">Journey</span>
+              <span className="font-extrabold text-brand-300">{completionRate}%</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-brand-400 to-teal-400 transition-all" style={{ width: `${completionRate}%` }} />
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{stats.completedTours} of {stats.totalBookings} trips completed</p>
+          </div>
+
+          {/* Quick stats */}
+          <div className="mt-3 space-y-2">
+            <SidebarStat icon={TicketCheck} label="Total bookings" value={stats.totalBookings} />
+            <SidebarStat icon={Clock} label="Upcoming" value={stats.upcomingTours} accent />
+            <SidebarStat icon={CheckCircle2} label="Completed" value={stats.completedTours} />
+            <SidebarStat icon={Wallet} label="Total spent" value={`৳${Number(stats.totalSpent).toFixed(0)}`} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SidebarStat({ icon: Icon, label, value, accent }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.04] px-3 py-2.5">
+      <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${accent ? 'bg-sky-500/15 text-sky-300' : 'bg-white/[0.07] text-slate-400'}`}>
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <span className="flex-1 text-xs text-slate-400">{label}</span>
+      <span className="font-display text-sm font-extrabold text-white">{value}</span>
+    </div>
+  );
+}
+
+// ─── Calendar ─────────────────────────────────────────────────
 function BookingCalendar({ bookings }) {
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const today = new Date();
@@ -307,150 +272,188 @@ function BookingCalendar({ bookings }) {
     const date = new Date(month.getFullYear(), month.getMonth(), index - firstWeekday + 1);
     return { date, inMonth: date.getMonth() === month.getMonth(), key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` };
   });
+  const bookingDates = new Set(bookings.map((b) => String(b.StartDate).slice(0, 10)));
   const onDay = bookings.filter((booking) => String(booking.StartDate).slice(0, 10) === selectedDay);
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-      <div className="mb-4 flex items-center justify-between"><div><h2 className="font-display text-lg font-bold text-white">Trip calendar</h2><p className="text-xs text-slate-400">Your booking dates at a glance</p></div><div className="flex items-center gap-3"><button aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="rounded-lg border border-white/10 p-2 text-slate-300"><ChevronLeft className="h-4 w-4" /></button><span className="min-w-28 text-center text-sm font-semibold text-white">{month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span><button aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="rounded-lg border border-white/10 p-2 text-slate-300"><ChevronRight className="h-4 w-4" /></button></div></div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase text-slate-500">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day) => <span key={day} className="py-2">{day}</span>)}</div>
-      <div className="grid grid-cols-7 gap-1">{cells.map(({ date, inMonth, key }) => { const hasBooking = bookings.some((booking) => String(booking.StartDate).slice(0, 10) === key); return <button key={key} disabled={!inMonth} onClick={() => setSelectedDay(key)} className={`relative rounded-lg py-2 text-sm ${inMonth ? 'text-slate-200 hover:bg-white/10' : 'text-slate-700'} ${selectedDay === key ? 'bg-brand-500/20 text-brand-200 ring-1 ring-brand-400/50' : ''}`}>{date.getDate()}{hasBooking && <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-brand-400" />}</button>; })}</div>
-      <div className="mt-4 border-t border-white/10 pt-3"><p className="mb-2 text-xs font-semibold text-slate-300">{new Date(`${selectedDay}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>{onDay.length ? onDay.map((booking) => <p key={booking.Id} className="text-sm text-brand-200">{booking.TourTitle || `Tour with ${booking.GuideName}`} · <span className="capitalize text-slate-400">{booking.Status}</span></p>) : <p className="text-xs text-slate-500">No booking on this date.</p>}</div>
+    <section className="relative h-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl sm:p-6">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-400/60 to-transparent" />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-lg shadow-sky-500/25">
+            <CalendarDays className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="font-display text-base font-bold text-white">Trip calendar</h2>
+            <p className="text-[11px] text-slate-500">Booking dates at a glance</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="rounded-xl border border-white/10 bg-white/[0.05] p-2 text-slate-300 transition-all hover:bg-white/[0.12] hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
+          <span className="min-w-32 text-center text-[13px] font-bold text-white">{month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+          <button aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="rounded-xl border border-white/10 bg-white/[0.05] p-2 text-slate-300 transition-all hover:bg-white/[0.12] hover:text-white"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day) => <span key={day} className="py-2">{day}</span>)}</div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map(({ date, inMonth, key }) => {
+          const hasBooking = bookingDates.has(key);
+          const isSelected = selectedDay === key;
+          const isToday = localToday === key;
+          return (
+            <button
+              key={key}
+              disabled={!inMonth}
+              onClick={() => setSelectedDay(key)}
+              className={`relative rounded-xl py-2 text-[13px] font-semibold transition-all ${!inMonth ? 'text-slate-700' : isSelected ? 'bg-gradient-to-br from-brand-500 to-teal-500 text-white shadow-lg shadow-brand-500/30' : isToday ? 'bg-white/[0.08] text-white ring-1 ring-white/20 hover:bg-white/[0.12]' : 'text-slate-300 hover:bg-white/[0.08] hover:text-white'} disabled:opacity-40`}
+            >
+              {date.getDate()}
+              {hasBooking && !isSelected && <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-brand-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" />}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 rounded-2xl border border-white/10 bg-ink-950/50 p-3.5">
+        <p className="mb-2 text-xs font-bold text-slate-200">{new Date(`${selectedDay}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+        {onDay.length ? onDay.map((booking) => (
+          <div key={booking.Id} className="mb-1.5 flex items-center gap-2 rounded-xl bg-white/[0.05] px-3 py-2 last:mb-0">
+            <Navigation className="h-3.5 w-3.5 shrink-0 text-brand-300" />
+            <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">{booking.TourTitle || `Tour with ${booking.GuideName}`}</p>
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusMeta[booking.Status] || 'border-white/10 bg-white/10 text-slate-300'}`}>{booking.Status}</span>
+          </div>
+        )) : <p className="text-xs text-slate-500">No booking on this date — pick a dotted day to preview.</p>}
+      </div>
     </section>
   );
 }
 
-function SidebarContent({ user, stats }) {
-  return (
-    <div className="space-y-6">
-      {/* User info */}
-      <div className="text-center">
-        <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-500 to-teal-600 p-0.5">
-          <div className="flex h-full w-full items-center justify-center rounded-2xl bg-ink-950 overflow-hidden">
-            {user?.AvatarUrl ? (
-              <img src={user.AvatarUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <User className="h-7 w-7 text-slate-500" />
-            )}
-          </div>
-        </div>
-        <p className="font-display text-sm font-bold text-white">{user?.FullName}</p>
-        <p className="mt-0.5 text-[11px] text-slate-500">{user?.Email}</p>
-      </div>
-
-      {/* Quick stats */}
-      <div className="space-y-2">
-        <SidebarStat icon={CalendarDays} label="Total Bookings" value={stats.totalBookings} />
-        <SidebarStat icon={Clock} label="Upcoming" value={stats.upcomingTours} />
-        <SidebarStat icon={CheckCircle} label="Completed" value={stats.completedTours} />
-        <SidebarStat icon={DollarSign} label="Total Spent" value={`৳${Number(stats.totalSpent).toFixed(2)}`} />
-      </div>
-    </div>
-  );
-}
-
-function SidebarStat({ icon: Icon, label, value }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2.5">
-      <Icon className="h-4 w-4 text-slate-400" />
-      <span className="flex-1 text-xs text-slate-400">{label}</span>
-      <span className="text-sm font-bold text-white">{value}</span>
-    </div>
-  );
-}
-
 // ─── Metric Card ──────────────────────────────────────────────
-function MetricCard({ icon: Icon, label, value, color }) {
+function MetricCard({ icon: Icon, label, value, sub, gradient, shadow }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl transition-all duration-300 hover:bg-white/[0.06] sm:p-5">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06]">
-        <Icon className={`h-5 w-5 ${color}`} />
+    <div className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.07] sm:p-5">
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+      <div className="mb-3 flex items-center justify-between">
+        <span className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} text-white shadow-lg ${shadow} transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3`}>
+          <Icon className="h-5 w-5" />
+        </span>
       </div>
-      <p className="font-display text-2xl font-bold text-white">{value}</p>
-      <p className="mt-0.5 text-xs text-slate-400">{label}</p>
+      <p className="truncate font-display text-xl font-extrabold tracking-tight text-white sm:text-2xl">{value}</p>
+      <p className="mt-0.5 text-xs font-semibold text-slate-300">{label}</p>
+      <p className="mt-1 text-[11px] text-slate-500">{sub}</p>
     </div>
   );
 }
 
 // ─── Next Tour Banner ─────────────────────────────────────────
 function NextTourBanner({ tour, onCancel, cancellingId }) {
+  const navigate = useNavigate();
+  const [messaging, setMessaging] = useState(false);
+
+  const messageGuide = async () => {
+    if (!tour?.GuideId) return;
+    setMessaging(true);
+    try {
+      const conversation = await startConversation(tour.GuideId);
+      navigate(`/messages?conversation=${conversation.conversationId}`);
+    } catch (err) {
+      alert(err.message || 'Could not start a conversation');
+    } finally {
+      setMessaging(false);
+    }
+  };
+
   const days = daysUntil(tour.StartDate);
   const isUrgent = days <= 3 && days >= 0;
+  const countdownLabel = days < 0 ? 'Started' : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days} days`;
 
   return (
-    <div className={`rounded-2xl border p-5 sm:p-6 backdrop-blur-xl ${
-      isUrgent
-        ? 'border-amber-500/30 bg-amber-500/5'
-        : 'border-sky-500/20 bg-sky-500/5'
-    }`}>
-      <div className="flex items-start gap-3 mb-4">
-        {isUrgent ? (
-          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-        ) : (
-          <CalendarDays className="h-5 w-5 text-sky-400 shrink-0 mt-0.5" />
-        )}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Next Upcoming Tour</p>
-          <h3 className="mt-1 font-display text-lg font-bold text-white">
-            {days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `In ${days} days`}
-          </h3>
-        </div>
+    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className={`absolute -top-20 left-10 h-56 w-56 rounded-full blur-[80px] ${isUrgent ? 'bg-amber-500/25' : 'bg-sky-500/25'}`} />
+        <div className="absolute -bottom-24 right-0 h-56 w-72 rounded-full bg-brand-500/20 blur-[80px]" />
       </div>
+      <div className={`absolute inset-x-0 top-0 h-px ${isUrgent ? 'bg-gradient-to-r from-transparent via-amber-400/70 to-transparent' : 'bg-gradient-to-r from-transparent via-sky-400/70 to-transparent'}`} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <InfoPill icon={User} label="Guide" value={tour.GuideName} />
-        <InfoPill icon={MapPin} label="Tour" value={tour.TourTitle || tour.TourLocation || tour.GuideCity || 'N/A'} />
-        <InfoPill icon={Users} label="Group size" value={tour.GroupSize || 1} />
-        <InfoPill icon={Star} label="Rating" value={tour.GuideRating ? Number(tour.GuideRating).toFixed(1) : 'N/A'} />
-        <InfoPill icon={CalendarDays} label="Dates" value={`${formatDate(tour.StartDate)} — ${formatDate(tour.EndDate)}`} />
-        <InfoPill icon={DollarSign} label="Cost" value={`৳${Number(tour.TotalAmount).toFixed(2)}`} />
-        <InfoPill icon={DollarSign} label="Payment" value={tour.PaymentStatus || 'unpaid'} capitalize />
-        <InfoPill icon={Clock} label="Status" value={tour.Status} capitalize />
-      </div>
-
-      {tour.GuideSpecialties && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {tour.GuideSpecialties.split(',').map((s, i) => (
-            <span key={i} className="rounded-lg bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-slate-300">
-              {s.trim()}
-            </span>
-          ))}
+      <div className="relative flex flex-col gap-6 p-6 sm:p-7 lg:flex-row">
+        {/* Countdown */}
+        <div className={`flex shrink-0 items-center gap-4 rounded-2xl border p-4 sm:p-5 lg:w-60 lg:flex-col lg:items-start lg:justify-center ${isUrgent ? 'border-amber-400/25 bg-amber-500/10' : 'border-sky-400/25 bg-sky-500/10'}`}>
+          <span className={`flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-lg ${isUrgent ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30' : 'bg-gradient-to-br from-sky-500 to-cyan-600 shadow-sky-500/30'}`}>
+            {isUrgent ? <TriangleAlert className="h-5 w-5" /> : <Plane className="h-5 w-5" />}
+          </span>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Next upcoming tour</p>
+            <p className="mt-1 font-display text-3xl font-extrabold text-white">{countdownLabel}</p>
+            <p className="mt-1 text-xs text-slate-400">{formatDate(tour.StartDate)} — {formatDate(tour.EndDate)}</p>
+          </div>
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${statusMeta[tour.Status] || 'border-white/10 bg-white/10 text-slate-300'}`}>
+            <CircleDot className="h-3 w-3" /> {tour.Status}
+          </span>
         </div>
-      )}
 
-      <a target="_blank" rel="noreferrer"
-        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(tour.MeetingPoint || tour.TourLocation || tour.GuideCity || '')}`}
-        className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-brand-300 hover:text-brand-200">
-        <MapPin className="h-3.5 w-3.5" /> {tour.MeetingPoint || tour.TourLocation || tour.GuideCity || 'Open destination'} in Maps
-      </a>
+        {/* Details */}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate font-display text-xl font-extrabold text-white">{tour.TourTitle || `Trip with ${tour.GuideName}`}</h3>
+              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-400">
+                <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5 text-brand-300" /> {tour.GuideName}</span>
+                <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-rose-300" /> {tour.TourLocation || tour.GuideCity || 'N/A'}</span>
+                {tour.GuideRating > 0 && <span className="inline-flex items-center gap-1 font-semibold text-accent-300"><Star className="h-3.5 w-3.5 fill-accent-400 text-accent-400" /> {Number(tour.GuideRating).toFixed(1)}</span>}
+              </p>
+            </div>
+            <p className="rounded-2xl border border-white/10 bg-ink-950/60 px-4 py-2 text-right">
+              <span className="block font-display text-lg font-extrabold text-white">৳{Number(tour.TotalAmount || 0).toLocaleString()}</span>
+              <span className={`block text-[11px] font-bold capitalize ${tour.PaymentStatus === 'paid' ? 'text-emerald-300' : 'text-amber-300'}`}>{tour.PaymentStatus || 'unpaid'}</span>
+            </p>
+          </div>
 
-      <div className="mt-5 flex flex-wrap gap-3">
-        {tour.Status !== 'cancelled' && tour.Status !== 'completed' && tour.CanCancel !== false && tour.CanCancel !== 0 && (
-          <button
-            onClick={() => onCancel(tour.Id)}
-            disabled={cancellingId === tour.Id}
-            className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
-          >
-            {cancellingId === tour.Id ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <XCircle className="h-4 w-4" />
+          <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <InfoPill icon={Users} label="Group size" value={`${tour.GroupSize || 1} traveler(s)`} />
+            <InfoPill icon={MapPin} label="Meeting point" value={tour.MeetingPoint || tour.TourLocation || tour.GuideCity || 'Coordinate with guide'} />
+            <InfoPill icon={Clock} label="Cancel until" value={tour.CancellationDeadline ? formatDate(tour.CancellationDeadline) : '48h before start'} />
+          </div>
+
+          {tour.GuideSpecialties && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {tour.GuideSpecialties.split(',').map((s, i) => (
+                <span key={i} className="rounded-lg border border-brand-500/20 bg-brand-500/10 px-2 py-1 text-[11px] font-semibold text-brand-200">
+                  {s.trim()}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
+            {tour.Status !== 'cancelled' && tour.Status !== 'completed' && tour.CanCancel !== false && tour.CanCancel !== 0 && (
+              <button
+                onClick={() => onCancel(tour.Id)}
+                disabled={cancellingId === tour.Id}
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-[13px] font-bold text-rose-200 transition-all hover:bg-rose-500/20 disabled:opacity-50"
+              >
+                {cancellingId === tour.Id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                Cancel booking
+              </button>
             )}
-            Cancel Booking
-          </button>
-        )}
-        {tour.Status !== 'cancelled' && tour.Status !== 'completed' && !tour.CanCancel && <span className="self-center text-xs text-amber-300">Cancellation closes 48 hours before the tour.</span>}
-        {tour.GuidePhone && (
-          <a
-            href={`tel:${tour.GuidePhone}`}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-300 transition-all hover:bg-white/[0.1] hover:text-white"
-          >
-            <Phone className="h-4 w-4" />
-            Contact Guide
-          </a>
-        )}
-        <button className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-300 transition-all hover:bg-white/[0.1] hover:text-white">
-          <MessageSquare className="h-4 w-4" />
-          Message
-        </button>
+            {tour.GuidePhone && (
+              <a href={`tel:${tour.GuidePhone}`} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.07] px-4 py-2.5 text-[13px] font-bold text-slate-200 transition-all hover:bg-white/[0.12] hover:text-white">
+                <Phone className="h-4 w-4 text-emerald-300" /> {tour.GuidePhone}
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={messageGuide}
+              disabled={messaging || !tour?.GuideId}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.07] px-4 py-2.5 text-[13px] font-bold text-slate-200 transition-all hover:bg-white/[0.12] hover:text-white disabled:opacity-50"
+            >
+              {messaging ? <Loader2 className="h-4 w-4 animate-spin text-sky-300" /> : <MessageSquare className="h-4 w-4 text-sky-300" />}
+              Message guide
+            </button>
+            <a target="_blank" rel="noreferrer"
+              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(tour.MeetingPoint || tour.TourLocation || tour.GuideCity || '')}`}
+              className="inline-flex items-center gap-1.5 px-2 py-2.5 text-xs font-bold text-brand-300 hover:text-brand-200">
+              <MapPin className="h-3.5 w-3.5" /> Open in Maps <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -458,106 +461,15 @@ function NextTourBanner({ tour, onCancel, cancellingId }) {
 
 function InfoPill({ icon: Icon, label, value, capitalize }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.04] px-3 py-2">
-      <Icon className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+    <div className="flex items-center gap-2.5 rounded-2xl border border-white/5 bg-ink-950/50 px-3 py-2.5">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.07] text-slate-300">
+        <Icon className="h-4 w-4" />
+      </span>
       <div className="min-w-0">
-        <p className="text-[10px] text-slate-500">{label}</p>
-        <p className={`text-xs font-semibold text-white truncate ${capitalize ? 'capitalize' : ''}`}>{value || '—'}</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+        <p className={`truncate text-[13px] font-bold text-white ${capitalize ? 'capitalize' : ''}`}>{value || '—'}</p>
       </div>
     </div>
   );
 }
 
-// ─── Booking Row ──────────────────────────────────────────────
-function BookingRow({ booking: b, onCancel, cancellingId }) {
-  const [expanded, setExpanded] = useState(false);
-  const days = daysUntil(b.StartDate);
-  const isActive = b.Status === 'pending' || b.Status === 'confirmed';
-
-  return (
-    <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-6 sm:py-4 transition-colors hover:bg-white/[0.03]">
-      {/* Guide avatar + info */}
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white/[0.06]">
-          {b.GuideAvatar ? (
-            <img src={b.GuideAvatar} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <User className="h-5 w-5 text-slate-500" />
-            </div>
-          )}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{b.GuideName}</p>
-          <p className="text-xs text-slate-400 flex items-center gap-1">
-            <MapPin className="h-3 w-3" />
-            {b.GuideCity || 'N/A'}
-            {b.GuideRating > 0 && (
-              <>
-                <Star className="ml-1 h-3 w-3 fill-accent-400 text-accent-400" />
-                {Number(b.GuideRating).toFixed(1)}
-              </>
-            )}
-          </p>
-        </div>
-      </div>
-
-      {/* Dates */}
-      <div className="text-xs text-slate-300 sm:w-40">
-        {formatDate(b.StartDate)} — {formatDate(b.EndDate)}
-        {isActive && days >= 0 && (
-          <span className="ml-1 text-sky-400">
-            ({days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days}d`})
-          </span>
-        )}
-      </div>
-
-      {/* Status */}
-      <div className="flex items-center gap-3 sm:w-32">
-        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ${statusStyles[b.Status] || 'bg-white/10 text-slate-400'}`}>
-          {b.Status}
-        </span>
-      </div>
-
-      {/* Amount */}
-      <div className="text-sm font-semibold text-white sm:w-24 sm:text-right">
-        ৳{Number(b.TotalAmount).toFixed(2)}
-        <span className={`mt-1 block text-[10px] font-medium capitalize ${b.PaymentStatus === 'paid' ? 'text-emerald-300' : 'text-amber-300'}`}>
-          {b.PaymentStatus || 'unpaid'}
-        </span>
-      </div>
-
-      {/* Actions */}
-      {isActive && b.CanCancel !== false && b.CanCancel !== 0 && (
-        <div className="sm:w-32 sm:text-right">
-          <button
-            onClick={() => onCancel(b.Id)}
-            disabled={cancellingId === b.Id}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
-          >
-            {cancellingId === b.Id ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <XCircle className="h-3 w-3" />
-            )}
-            Cancel
-          </button>
-        </div>
-      )}
-      <button type="button" onClick={() => setExpanded((value) => !value)} className="self-start text-xs font-semibold text-brand-300 hover:text-white sm:self-center">{expanded ? 'Hide details' : 'Details'}</button>
-      {expanded && <div className="w-full rounded-xl border border-white/10 bg-black/10 p-4 text-sm text-slate-300 sm:basis-full">
-        <div className="grid gap-3 sm:grid-cols-2"><p><span className="text-slate-500">Package:</span> {b.TourTitle || 'Direct guide booking'}</p><p><span className="text-slate-500">Group:</span> {b.GroupSize || 1} traveler(s)</p><p><span className="text-slate-500">Guide contact:</span> {b.GuidePhone ? <a className="text-brand-300" href={`tel:${b.GuidePhone}`}>{b.GuidePhone}</a> : b.GuideEmail ? <a className="text-brand-300" href={`mailto:${b.GuideEmail}`}>{b.GuideEmail}</a> : 'Not provided'}</p><p><span className="text-slate-500">Payment:</span> <span className="capitalize">{b.PaymentStatus || 'unpaid'}</span></p><p><span className="text-slate-500">Cancellation deadline:</span> {b.CancellationDeadline ? formatDate(b.CancellationDeadline) : '48 hours before start'}</p><p><span className="text-slate-500">Meeting point:</span> {b.MeetingPoint || b.TourLocation || b.GuideCity || 'Coordinate with your guide'}</p></div>
-        {(b.MeetingPoint || b.TourLocation || b.GuideCity) && <a target="_blank" rel="noreferrer" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.MeetingPoint || b.TourLocation || b.GuideCity)}`} className="mt-3 inline-flex items-center gap-1 text-xs text-brand-300"><ExternalLink className="h-3 w-3" /> Map route</a>}
-        {!b.CanCancel && isActive && <p className="mt-2 text-xs text-amber-300">The 48-hour cancellation window has closed.</p>}
-        {b.Itinerary && <ItineraryDetails value={b.Itinerary} />}
-      </div>}
-    </div>
-  );
-}
-
-function ItineraryDetails({ value }) {
-  let days = [];
-  try { days = Array.isArray(value) ? value : JSON.parse(value); } catch { days = []; }
-  if (!Array.isArray(days) || !days.length) return null;
-  return <div className="mt-4"><h4 className="mb-2 font-semibold text-white">Trip itinerary</h4><ol className="space-y-2">{days.map((day, index) => <li key={index} className="rounded-lg bg-white/[0.04] p-3"><p className="text-xs font-semibold text-brand-200">{day.title || day.day || `Stop ${index + 1}`}</p><p className="mt-1 text-xs text-slate-400">{day.details || day.description || String(day)}</p></li>)}</ol></div>;
-}
