@@ -10,8 +10,8 @@
 
 -- 1) Review submit: Reviews INSERT + Guides.Rating/TotalReviews UPDATE
 --    ek TRANSACTION e. age reviewController.createReview e Node diye chilo.
---    NOTE: live DB te Reviews = (ReviewerId/RevieweeId/ReviewerRole),
---    schema.sql e = (TouristUserId/GuideId) — nicher IF branch 2tatei chole.
+--    Reviews uses the canonical schema from db/schema.sql
+--    (TouristUserId/GuideId). Keep this in sync with reviewController.js.
 CREATE OR ALTER PROCEDURE dbo.sp_SubmitReview
     @bookingId INT,
     @touristId INT,
@@ -46,40 +46,13 @@ BEGIN
             THROW 50003, 'You have already reviewed this booking.', 1;
         END
 
-        -- (c) Review insert (live vs schema.sql column set).
-        -- NOTE: purano-schema branch dynamic SQL e, jate CREATE PROCEDURE
-        -- live DB te column-check e fail na kore.
-        IF EXISTS (SELECT 1 FROM sys.columns
-                   WHERE object_id = OBJECT_ID('dbo.Reviews') AND name = 'RevieweeId')
-        BEGIN
-            INSERT INTO dbo.Reviews (BookingId, ReviewerId, RevieweeId, ReviewerRole, Rating, Comment)
-            VALUES (@bookingId, @touristId, @guideId, 'tourist', @rating, @comment);
-        END
-        ELSE
-        BEGIN
-            EXEC sp_executesql
-                N'INSERT INTO dbo.Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
-                   VALUES (@b, @t, @g, @r, @c)',
-                N'@b INT, @t INT, @g INT, @r TINYINT, @c NVARCHAR(MAX)',
-                @b = @bookingId, @t = @touristId, @g = @guideId, @r = @rating, @c = @comment;
-        END
+        INSERT INTO dbo.Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
+        VALUES (@bookingId, @touristId, @guideId, @rating, @comment);
 
         -- (d) Guide rating recalc (TRIGGER o same kaj kore — double-safe)
         DECLARE @avg DECIMAL(10,2), @cnt INT;
-        IF EXISTS (SELECT 1 FROM sys.columns
-                   WHERE object_id = OBJECT_ID('dbo.Reviews') AND name = 'RevieweeId')
-        BEGIN
-            SELECT @avg = AVG(CAST(Rating AS DECIMAL(10,2))), @cnt = COUNT(*)
-            FROM dbo.Reviews WHERE RevieweeId = @guideId AND ReviewerRole = 'tourist';
-        END
-        ELSE
-        BEGIN
-            EXEC sp_executesql
-                N'SELECT @a = AVG(CAST(Rating AS DECIMAL(10,2))), @n = COUNT(*)
-                   FROM dbo.Reviews WHERE GuideId = @g',
-                N'@g INT, @a DECIMAL(10,2) OUTPUT, @n INT OUTPUT',
-                @g = @guideId, @a = @avg OUTPUT, @n = @cnt OUTPUT;
-        END
+        SELECT @avg = AVG(CAST(Rating AS DECIMAL(10,2))), @cnt = COUNT(*)
+        FROM dbo.Reviews WHERE GuideId = @guideId;
 
         UPDATE dbo.Guides
         SET Rating = @avg, TotalReviews = @cnt, UpdatedAt = SYSUTCDATETIME()

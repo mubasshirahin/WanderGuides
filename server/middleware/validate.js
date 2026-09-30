@@ -44,6 +44,10 @@ export const bookingSchema = z.object({
   path: ['guideId'],
 });
 
+export const paymentStatusSchema = z.object({
+  paymentStatus: z.enum(['paid', 'refunded']),
+}).strict();
+
 export const profileUpdateSchema = z.object({
   fullName: z.string().trim().min(1).max(100).optional(),
   phone: optionalTrimmedString(30),

@@ -20,6 +20,16 @@ const config = {
 };
 
 const statements = [
+  `DECLARE @roleChecks NVARCHAR(MAX) = (SELECT STRING_AGG('ALTER TABLE dbo.Users DROP CONSTRAINT ' + QUOTENAME(name), ';') FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('dbo.Users') AND definition LIKE '%Role%' AND definition NOT LIKE '%admin%'); IF @roleChecks IS NOT NULL EXEC sys.sp_executesql @roleChecks; IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('dbo.Users') AND definition LIKE '%Role%' AND definition LIKE '%admin%') ALTER TABLE dbo.Users ADD CONSTRAINT CK_Users_Role CHECK (Role IN ('tourist','guide','admin'))`,
+  `IF COL_LENGTH('Users', 'Provider') IS NULL ALTER TABLE Users ADD Provider NVARCHAR(20) NOT NULL CONSTRAINT DF_Users_Provider_UI DEFAULT 'local'`,
+  `IF COL_LENGTH('Users', 'ProviderId') IS NULL ALTER TABLE Users ADD ProviderId NVARCHAR(255) NULL`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_Users_ProviderId' AND object_id = OBJECT_ID('Users')) CREATE UNIQUE INDEX UX_Users_ProviderId ON Users(Provider, ProviderId) WHERE ProviderId IS NOT NULL`,
+  `IF OBJECT_ID('Conversations', 'U') IS NULL CREATE TABLE Conversations (ConversationID INT IDENTITY PRIMARY KEY, TouristID INT NOT NULL, GuideID INT NOT NULL, LastMessage NVARCHAR(MAX) NULL, LastMessageAt DATETIME2 NOT NULL CONSTRAINT DF_Conversations_LastMessageAt_UI DEFAULT SYSUTCDATETIME(), CONSTRAINT FK_Conversations_Tourist_UI FOREIGN KEY (TouristID) REFERENCES Users(Id), CONSTRAINT FK_Conversations_Guide_UI FOREIGN KEY (GuideID) REFERENCES Users(Id), CONSTRAINT UQ_Conversations_Pair_UI UNIQUE (TouristID, GuideID))`,
+  `IF OBJECT_ID('Messages', 'U') IS NULL CREATE TABLE Messages (MessageID INT IDENTITY PRIMARY KEY, ConversationID INT NOT NULL, SenderID INT NOT NULL, ReceiverID INT NOT NULL, MessageText NVARCHAR(MAX) NOT NULL, IsRead BIT NOT NULL CONSTRAINT DF_Messages_IsRead_UI DEFAULT 0, CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_Messages_CreatedAt_UI DEFAULT SYSUTCDATETIME(), CONSTRAINT FK_Messages_Conversation_UI FOREIGN KEY (ConversationID) REFERENCES Conversations(ConversationID), CONSTRAINT FK_Messages_Sender_UI FOREIGN KEY (SenderID) REFERENCES Users(Id), CONSTRAINT FK_Messages_Receiver_UI FOREIGN KEY (ReceiverID) REFERENCES Users(Id))`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Conversations_Tourist_UI' AND object_id = OBJECT_ID('Conversations')) CREATE INDEX IX_Conversations_Tourist_UI ON Conversations(TouristID)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Conversations_Guide_UI' AND object_id = OBJECT_ID('Conversations')) CREATE INDEX IX_Conversations_Guide_UI ON Conversations(GuideID)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Messages_Conversation_UI' AND object_id = OBJECT_ID('Messages')) CREATE INDEX IX_Messages_Conversation_UI ON Messages(ConversationID, MessageID)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Messages_ReceiverRead_UI' AND object_id = OBJECT_ID('Messages')) CREATE INDEX IX_Messages_ReceiverRead_UI ON Messages(ReceiverID, IsRead, ConversationID)`,
   `IF COL_LENGTH('Guides', 'IsVerified') IS NULL ALTER TABLE Guides ADD IsVerified BIT NOT NULL CONSTRAINT DF_Guides_IsVerified_UI DEFAULT 0`,
   `IF OBJECT_ID('GuideNotifications', 'U') IS NULL
    CREATE TABLE GuideNotifications (
@@ -137,7 +147,7 @@ async function run() {
     for (const statement of statements) {
       await pool.request().query(statement);
     }
-    console.log('[migration] Tourist profiles, tour packages, guide directory, favorites, and payment status schema are up to date.');
+    console.log('[migration] User providers, admin roles, chat, tourist profiles, tours, favorites, notifications, and payment status schema are up to date.');
   } catch (error) {
     console.error('[migration] Failed:', error.message);
     process.exitCode = 1;
