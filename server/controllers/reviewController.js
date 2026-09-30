@@ -115,7 +115,7 @@ export const createReview = createCreateReview();
  *  Tour complete kora lage na — View te giye je kono tourist guide ke
  *  rating/review dite parbe (one-way: tourist -> guide only).
  *  Reviews.BookingId NULL থাকে (db/migrate-open-reviews.sql চালানোর পর).
- *  Ek tourist ek guide ke 1ta open review dite parbe; abar dile update hobe.
+ *  Protibar notun row add hoy — ager review replace hoy na.
  */
 export function createCreateGuideReview(queryFn = query) {
   return async function createGuideReview(req, res) {
@@ -170,21 +170,7 @@ export function createCreateGuideReview(queryFn = query) {
       }
     };
 
-    const EXIST_LEGACY = `SELECT Id FROM Reviews WHERE TouristUserId = @touristId AND GuideId = @guideId AND BookingId IS NULL`;
-    const EXIST_LIVE = `SELECT Id FROM Reviews WHERE ReviewerId = @touristId AND RevieweeId = @guideId AND ReviewerRole = 'tourist' AND BookingId IS NULL`;
     // NOTE: Reviews-te AFTER INSERT trigger ache, tai OUTPUT ... INTO @table pattern (direct OUTPUT fail kore).
-    const UPDATE_LEGACY = `DECLARE @upd TABLE (Id INT, BookingId INT, TouristUserId INT, GuideId INT, Rating TINYINT, Comment NVARCHAR(MAX), CreatedAt DATETIME2);
-           UPDATE Reviews SET Rating = @rating, Comment = @comment
-           OUTPUT INSERTED.Id, INSERTED.BookingId, INSERTED.TouristUserId,
-                  INSERTED.GuideId, INSERTED.Rating, INSERTED.Comment, INSERTED.CreatedAt INTO @upd
-           WHERE Id = @id;
-           SELECT Id, BookingId, TouristUserId, GuideId, Rating, Comment, CreatedAt FROM @upd;`;
-    const UPDATE_LIVE = `DECLARE @upd TABLE (Id INT, BookingId INT, TouristUserId INT, GuideId INT, Rating TINYINT, Comment NVARCHAR(MAX), CreatedAt DATETIME2);
-           UPDATE Reviews SET Rating = @rating, Comment = @comment
-           OUTPUT INSERTED.Id, INSERTED.BookingId, INSERTED.ReviewerId,
-                  INSERTED.RevieweeId, INSERTED.Rating, INSERTED.Comment, INSERTED.CreatedAt INTO @upd
-           WHERE Id = @id;
-           SELECT Id, BookingId, TouristUserId, GuideId, Rating, Comment, CreatedAt FROM @upd;`;
     const INSERT_LEGACY = `DECLARE @new TABLE (Id INT, BookingId INT, TouristUserId INT, GuideId INT, Rating TINYINT, Comment NVARCHAR(MAX), CreatedAt DATETIME2);
            INSERT INTO Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
            OUTPUT INSERTED.Id, INSERTED.BookingId, INSERTED.TouristUserId,
@@ -204,41 +190,19 @@ export function createCreateGuideReview(queryFn = query) {
               COUNT(*) AS ReviewCount
        FROM Reviews WHERE RevieweeId = @guideId AND ReviewerRole = 'tourist'`;
 
-    // Age open review thakle update (je keo abar rating dite parbe)
-    const existing = await runQ(EXIST_LEGACY, EXIST_LIVE, { touristId, guideId: guideUserId });
-
+    // Open review: protibar notun row add hoy — ager review replace hoy na.
     let reviewRow;
     try {
-      if (existing.length) {
-        const updated = await runQ(UPDATE_LEGACY, UPDATE_LIVE,
-          { id: Number(existing[0].Id), rating: ratingNum, comment: cleanComment }
-        );
-        reviewRow = updated[0];
-      } else {
-        const inserted = await runQ(INSERT_LEGACY, INSERT_LIVE,
-          { touristId, guideId: guideUserId, rating: ratingNum, comment: cleanComment }
-        );
-        reviewRow = inserted[0];
-      }
+      const inserted = await runQ(INSERT_LEGACY, INSERT_LIVE,
+        { touristId, guideId: guideUserId, rating: ratingNum, comment: cleanComment }
+      );
+      reviewRow = inserted[0];
     } catch (err) {
       // Migration na chalale BookingId NOT NULL thakbe (error 515)
       if (err?.number === 515) {
         throw new AppError('Open reviews need DB migration: run db/migrate-open-reviews.sql once.', 500);
       }
-      // Race-e duplicate hole existing ta update kore dao
-      if (err?.number === 2601 || err?.number === 2627) {
-        const again = await runQ(EXIST_LEGACY, EXIST_LIVE, { touristId, guideId: guideUserId });
-        if (again.length) {
-          const updated = await runQ(UPDATE_LEGACY, UPDATE_LIVE,
-            { id: Number(again[0].Id), rating: ratingNum, comment: cleanComment }
-          );
-          reviewRow = updated[0];
-        } else {
-          throw new AppError('You have already reviewed this guide', 409);
-        }
-      } else {
-        throw err;
-      }
+      throw err;
     }
 
     // Guide rating recalc (booking + open sob review mile)
@@ -252,7 +216,7 @@ export function createCreateGuideReview(queryFn = query) {
       { guideId: guideUserId, rating: averageRating.toFixed(2), reviewCount }
     );
 
-    res.status(existing.length ? 200 : 201).json({ ok: true, review: reviewRow });
+    res.status(201).json({ ok: true, review: reviewRow });
   };
 }
 

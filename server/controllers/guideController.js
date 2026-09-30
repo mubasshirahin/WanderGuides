@@ -107,11 +107,29 @@ export async function getGuideEx(req, res) {
   const guideUserID = rows[0].UserID;
 
   let reviewsSql, reviewsParams;
-  const live = await query(
-    `SELECT COUNT(*) AS c FROM sys.columns WHERE object_id = OBJECT_ID('Reviews') AND name = 'RevieweeId'`,
+  const colCheck = await query(
+    `SELECT
+       SUM(CASE WHEN name = 'RevieweeId' THEN 1 ELSE 0 END) AS hasOld,
+       SUM(CASE WHEN name = 'GuideId' THEN 1 ELSE 0 END) AS hasNew
+     FROM sys.columns WHERE object_id = OBJECT_ID('Reviews') AND name IN ('RevieweeId', 'GuideId')`,
     {}
   );
-  if (live[0].c > 0) {
+  const hasOld = Number(colCheck[0]?.hasOld) > 0;
+  const hasNew = Number(colCheck[0]?.hasNew) > 0;
+  if (hasOld && hasNew) {
+    // Migrated DB: both column sets exist. New rows fill TouristUserId/GuideId,
+    // old rows fill ReviewerId/RevieweeId — match either, join either.
+    reviewsSql = `
+      SELECT
+        r.Id, r.Rating, r.Comment, r.GuideResponse, r.GuideResponseAt, r.CreatedAt,
+        tourist.FullName AS TouristName, tourist.AvatarUrl AS TouristAvatarUrl
+      FROM Reviews r
+      INNER JOIN Users tourist ON tourist.Id = COALESCE(r.TouristUserId, r.ReviewerId)
+      WHERE r.GuideId = @guideId
+         OR (@guideUserID IS NOT NULL AND (r.GuideId = @guideUserID OR r.RevieweeId = @guideUserID))
+      ORDER BY r.CreatedAt DESC`;
+    reviewsParams = { guideId: rows[0].Id, guideUserID };
+  } else if (hasOld) {
     // Live DB: Reviews uses ReviewerId/RevieweeId/ReviewerRole.
     reviewsSql = `
       SELECT
