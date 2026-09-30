@@ -259,7 +259,7 @@ export default function TouristProfilePage() {
           {/* Quick Stats */}
           <div className="grid grid-cols-3 gap-3 sm:gap-4">
             <StatCard icon={CheckCircle} label="Completed Tours" value={stats?.completedTours || 0} color="text-emerald-400" />
-            <StatCard icon={Star} label="Reviews" value={stats?.totalReviews || 0} color="text-accent-400" />
+            <StatCard icon={Star} label="Reviews Given" value={profile?.stats?.totalReviews ?? stats?.totalReviews ?? (reviews?.length || 0)} color="text-accent-400" />
             <StatCard icon={CalendarDays} label="Total Bookings" value={stats?.totalBookings || 0} color="text-brand-400" />
           </div>
 
@@ -329,12 +329,12 @@ export default function TouristProfilePage() {
             </div>
           )}
 
-          {/* Reviews from Guides */}
+          {/* Reviews given to guides (one-way: only tourist -> guide) */}
           {reviews && reviews.length > 0 && (
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
               <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
                 <Star className="h-5 w-5 text-accent-400" />
-                Reviews from Guides
+                Reviews You Gave to Guides
                 <span className="ml-auto text-sm font-normal text-slate-400">({reviews.length})</span>
               </h3>
               <div className="space-y-4">
@@ -375,7 +375,7 @@ export default function TouristProfilePage() {
           {reviews && reviews.length === 0 && (
             <div className="rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.03] px-6 py-10 text-center">
               <Star className="mx-auto mb-3 h-8 w-8 text-slate-500" />
-              <p className="text-sm text-slate-400">No reviews from guides yet.</p>
+              <p className="text-sm text-slate-400">You haven&apos;t reviewed any guide yet. Complete a tour to leave a rating.</p>
             </div>
           )}
         </div>

@@ -1,7 +1,133 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, MapPin, ShieldCheck, ChevronDown } from 'lucide-react';
-import { getStoredUser } from '../lib/demoAuth.js';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Compass, Menu, X, LogOut, LayoutDashboard, Search, CalendarDays, UserCircle, Plus, MessageSquare, ClipboardList, Star, Map, MapPin, ShieldCheck, ChevronDown, Bell, CheckCheck, Loader2 } from 'lucide-react';
+import { authFetch, getStoredUser, getToken } from '../lib/demoAuth.js';
+import { io } from 'socket.io-client';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+
+// Notification feed per role: tourist -> TouristNotifications, guide -> GuideNotifications.
+const NOTIFICATION_SOURCES = {
+  tourist: { list: '/api/tourist/notifications', read: (id) => `/api/tourist/notifications/${id}/read`, event: 'notification:new' },
+  guide: { list: '/api/guide/notifications', read: (id) => `/api/guide/notifications/${id}/read`, event: 'guide_notification:new' },
+};
+
+function NotificationBell({ role }) {
+  const source = NOTIFICATION_SOURCES[role];
+  const navigate = useNavigate();
+  const boxRef = useRef(null);
+  const [items, setItems] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
+  const unreadCount = items.filter((item) => !item.IsRead).length;
+
+  useEffect(() => {
+    if (!source) return undefined;
+    let active = true;
+    authFetch(source.list)
+      .then((res) => res.json())
+      .then((json) => { if (active && json.ok) setItems(json.notifications || []); })
+      .catch(() => { /* the dropdown shows an empty state */ })
+      .finally(() => { if (active) setLoaded(true); });
+    return () => { active = false; };
+  }, [source]);
+
+  useEffect(() => {
+    if (!source) return undefined;
+    const token = getToken();
+    if (!token) return undefined;
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket', 'polling'] });
+    socket.on(source.event, (notification) => {
+      setItems((current) => [notification, ...current.filter((item) => item.Id !== notification.Id)].slice(0, 30));
+    });
+    return () => socket.disconnect();
+  }, [source]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open]);
+
+  if (!source) return null;
+
+  const markRead = async (id) => {
+    if (!id) return;
+    setItems((current) => current.map((item) => (item.Id === id ? { ...item, IsRead: true } : item)));
+    try {
+      await authFetch(source.read(id), { method: 'PUT' });
+    } catch { /* stays read locally and syncs on the next load */ }
+  };
+
+  const openNotification = (item) => {
+    markRead(item.Id);
+    if (item.LinkUrl) {
+      setOpen(false);
+      navigate(item.LinkUrl);
+    }
+  };
+
+  const markAllRead = () => Promise.all(items.filter((item) => !item.IsRead).map((item) => markRead(item.Id)));
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ''}`}
+        className={`relative rounded-xl border p-2 transition-colors duration-300 ${open ? 'border-brand-500/40 bg-brand-500/10 text-brand-300' : 'border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white'}`}
+      >
+        <Bell className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 to-orange-600 px-1 text-[10px] font-extrabold text-white shadow-lg shadow-accent-500/40">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-white/10 bg-ink-950/95 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <p className="font-display text-sm font-bold text-white">Notifications</p>
+            {unreadCount > 0 && (
+              <button onClick={markAllRead} className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1 text-[11px] font-semibold text-brand-300 transition-all hover:bg-white/[0.12] hover:text-white">
+                <CheckCheck className="h-3 w-3" /> Mark all read
+              </button>
+            )}
+          </div>
+          {!loaded ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-brand-400" />
+            </div>
+          ) : items.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <Bell className="mx-auto h-6 w-6 text-slate-600" />
+              <p className="mt-2 text-xs text-slate-500">No notifications yet.</p>
+            </div>
+          ) : (
+            <div className="max-h-96 divide-y divide-white/5 overflow-y-auto">
+              {items.map((item) => (
+                <button
+                  key={item.Id}
+                  onClick={() => openNotification(item)}
+                  className={`flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors ${item.IsRead ? 'hover:bg-white/5' : 'bg-brand-500/[0.08] hover:bg-brand-500/[0.14]'}`}
+                >
+                  {!item.IsRead && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />}
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-bold leading-snug text-white">{item.Title}</span>
+                    <span className="mt-0.5 block line-clamp-2 text-xs leading-relaxed text-slate-400">{item.Body}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const loggedOutLinks = [{ to: '/', label: 'Home' }];
 
@@ -229,7 +355,10 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
           {/* Desktop auth buttons */}
           <div className="hidden items-center gap-3 md:flex">
             {isAuthenticated ? (
-              <ProfileMenu role={role} onLogout={onLogout} />
+              <>
+                <NotificationBell role={role} />
+                <ProfileMenu role={role} onLogout={onLogout} />
+              </>
             ) : (
               <>
                 <Link
@@ -248,14 +377,17 @@ export default function Navbar({ isAuthenticated, role, onLogout }) {
             )}
           </div>
 
-          {/* Mobile toggle */}
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white md:hidden"
-            aria-label="Toggle menu"
-          >
-            {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
+          {/* Mobile notifications + toggle */}
+          <div className="flex items-center gap-1.5 md:hidden">
+            {isAuthenticated && <NotificationBell role={role} />}
+            <button
+              onClick={() => setOpen((o) => !o)}
+              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Toggle menu"
+            >
+              {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+          </div>
         </div>
       </nav>
 

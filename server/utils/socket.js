@@ -66,12 +66,38 @@ export function initSocket(server) {
         }
 
         const convo = convoRows[0];
-        if (convo.TouristID !== authenticatedUserId && convo.GuideID !== authenticatedUserId) {
-          return callback?.({ ok: false, message: 'Forbidden' });
+        const touristId = Number(convo.TouristID);
+        const guideId = Number(convo.GuideID);
+        const isDirectMember = touristId === authenticatedUserId || guideId === authenticatedUserId;
+        if (!isDirectMember) {
+          // Legacy row te GuideID te Guides.Id (profile) thakle profile mapping diye member dhorbo,
+          // jate guide reply korte pare.
+          const profileRows = await query('SELECT Id FROM Guides WHERE UserID = @authId', {
+            authId: authenticatedUserId,
+          });
+          const profileIds = new Set(profileRows.map((r) => Number(r.Id)));
+          if (!profileIds.has(touristId) && !profileIds.has(guideId)) {
+            return callback?.({ ok: false, message: 'Forbidden' });
+          }
         }
 
         const senderId = authenticatedUserId;
-        const receiverId = convo.TouristID === senderId ? convo.GuideID : convo.TouristID;
+        // Legacy row hole receiver onno side er direct Users.Id (TouristID).
+        let receiverId = touristId === senderId ? guideId : touristId;
+
+        // receiverId te Guides.Id (profile) dhuke thakle Users.Id te translate,
+        // nahole Messages/GuideNotifications FK fail kore guide kokhono message peto na.
+        const receiverUserRows = await query('SELECT Id FROM Users WHERE Id = @receiverId', {
+          receiverId,
+        });
+        if (!receiverUserRows.length) {
+          const linkedRows = await query('SELECT UserID FROM Guides WHERE Id = @receiverId', {
+            receiverId,
+          });
+          if (linkedRows.length && linkedRows[0].UserID) {
+            receiverId = Number(linkedRows[0].UserID);
+          }
+        }
 
         const now = new Date();
         // NOTE: Messages-te AFTER INSERT trigger ache, tai OUTPUT ... INTO @table pattern.

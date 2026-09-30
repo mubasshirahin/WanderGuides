@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Star, Loader2, User, MapPin, CalendarDays, Send, CheckCircle,
   MessageSquare, BarChart3, Filter
@@ -8,7 +9,9 @@ import { authFetch, getStoredUser } from '../lib/demoAuth.js';
 
 export default function ReviewsPage({ role = 'tourist' }) {
   const currentUser = getStoredUser();
-  const [activeTab, setActiveTab] = useState('received');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // One-way: tourist -> guide only. Tourist never receives reviews, guide never writes them.
+  const [activeTab, setActiveTab] = useState(role === 'guide' ? 'received' : 'write');
   const [reviewsReceived, setReviewsReceived] = useState([]);
   const [givenReviews, setGivenReviews] = useState([]);
   const [pendingBookings, setPendingBookings] = useState([]);
@@ -53,6 +56,20 @@ export default function ReviewsPage({ role = 'tourist' }) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Deep-link support: /reviews?write=1&booking=<id> opens the form with that booking preselected
+  // (e.g. the "Rate" button on a completed booking in My Bookings).
+  useEffect(() => {
+    if (loading) return;
+    if (searchParams.get('write') !== '1' || role === 'guide') return;
+    setActiveTab('write');
+    const bookingParam = Number(searchParams.get('booking'));
+    if (bookingParam) {
+      const match = pendingBookings.find((b) => Number(b.BookingId) === bookingParam);
+      if (match) setSelectedBooking(match);
+    }
+    setSearchParams({}, { replace: true });
+  }, [loading, searchParams, pendingBookings, role, setSearchParams]);
+
   const handleSubmitReview = async (e) => {
     e.preventDefault();
     if (!selectedBooking || rating === 0) return;
@@ -76,7 +93,7 @@ export default function ReviewsPage({ role = 'tourist' }) {
       setRating(0);
       setComment('');
       await fetchAll();
-      setActiveTab('received');
+      setActiveTab(role === 'guide' ? 'received' : 'given');
       setTimeout(() => setSuccess(''), 3000);
     } catch (e) {
       setError(e.message);
@@ -88,7 +105,7 @@ export default function ReviewsPage({ role = 'tourist' }) {
   if (loading) {
     return (
       <div>
-        <PageHeader eyebrow="Feedback" title="Reviews" description={role === 'guide' ? 'Read reviews from tourists and respond to them.' : 'Rate and review after your tours.'} />
+        <PageHeader eyebrow="Feedback" title="Reviews" description={role === 'guide' ? 'Read reviews from tourists and respond to them.' : 'Rate your guides after completed tours.'} />
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
         </div>
@@ -101,7 +118,7 @@ export default function ReviewsPage({ role = 'tourist' }) {
       <PageHeader
         eyebrow="Feedback"
         title="Reviews"
-        description={role === 'guide' ? 'Read reviews from tourists and respond to them.' : 'Rate and review your travel partners.'}
+        description={role === 'guide' ? 'Read reviews from tourists and respond to them.' : 'Only tourists can review guides. Rate your guide after a completed tour.'}
       />
 
       {/* Success / Error */}
@@ -116,8 +133,9 @@ export default function ReviewsPage({ role = 'tourist' }) {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs — one-way: guide sees received only, tourist sees write + given */}
       <div className="mb-6 flex gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 backdrop-blur-xl">
+        {role === 'guide' && (
         <button
           onClick={() => { setActiveTab('received'); setError(null); }}
           className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${
@@ -132,6 +150,7 @@ export default function ReviewsPage({ role = 'tourist' }) {
             <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px]">{reviewsReceived.length}</span>
           )}
         </button>
+        )}
         {role !== 'guide' && <button
           onClick={() => { setActiveTab('write'); setError(null); }}
           className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${
@@ -163,9 +182,9 @@ export default function ReviewsPage({ role = 'tourist' }) {
       </div>
 
       {/* ════════════════════════════════════════════════════ */}
-      {/* TAB: Reviews Given to Me                          */}
+      {/* TAB: Reviews Given to Me (guide only — one-way)     */}
       {/* ════════════════════════════════════════════════════ */}
-      {activeTab === 'received' && (
+      {activeTab === 'received' && role === 'guide' && (
         <div className="space-y-6">
           {/* Average Rating Card */}
           {avgData && avgData.total > 0 && (

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { authFetch } from '../lib/demoAuth.js';
 import { startConversation } from '../lib/chat.js';
+import { handleImgError } from '../lib/avatar.js';
+import SmartImage from '../components/SmartImage.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 
 const currency = (n) =>
@@ -53,12 +55,8 @@ function Stars({ rating }) {
 }
 
 function Avatar({ src, name, className = 'h-12 w-12' }) {
-  return src ? (
-    <img src={src} alt={name} className={`${className} rounded-full object-cover ring-2 ring-brand-500/40`} />
-  ) : (
-    <div className={`${className} flex items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-teal-700 text-lg font-bold text-white`}>
-      {(name || 'G').charAt(0).toUpperCase()}
-    </div>
+  return (
+    <SmartImage src={src} name={name} className={className} rounded="rounded-full" imgClassName="ring-2 ring-brand-500/40" />
   );
 }
 
@@ -388,7 +386,7 @@ export default function BrowseToursPage({ role }) {
       {selected && (
         <Modal onClose={() => setSelected(null)} maxWidth="max-w-2xl">
           <div>
-            {selected.ImageUrl && <img src={selected.ImageUrl} alt={selected.Title} className="mb-4 h-52 w-full rounded-xl object-cover" />}
+            {selected.ImageUrl && <img src={selected.ImageUrl} alt={selected.Title} onError={(e) => handleImgError(e, selected.Title)} className="mb-4 h-52 w-full rounded-xl object-cover" />}
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-bold text-white">{selected.Title}</h2>
@@ -556,7 +554,11 @@ function TourCard({ tour: t, onView, onFavorite, isFavorite }) {
   return (
     <div className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-500/40 hover:bg-white/[0.05]">
       <div className="relative -mx-5 -mt-5 mb-4 h-36 overflow-hidden rounded-t-2xl bg-gradient-to-br from-brand-800/70 via-slate-800 to-teal-900/70">
-        {t.ImageUrl && <img src={t.ImageUrl} alt={t.Title} loading="lazy" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />}
+        {t.ImageUrl ? (
+          <img src={t.ImageUrl} alt={t.Title} loading="lazy" onError={(e) => handleImgError(e, t.Title)} className="h-full w-full object-cover" />
+        ) : (
+          <img src={`https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(t.Title || 'tour')}&backgroundColor=059669,0d9488`} alt={t.Title} loading="lazy" className="h-full w-full object-cover opacity-80" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-ink-950/60 to-transparent" />
         <button type="button" onClick={() => onFavorite(t)} aria-label={isFavorite ? 'Remove saved tour' : 'Save tour'}
           className="absolute right-3 top-3 rounded-full border border-white/20 bg-ink-950/70 p-2 text-white backdrop-blur hover:text-rose-300">

@@ -57,12 +57,14 @@ CREATE INDEX IX_Bookings_Status ON Bookings(Status);
 
 -- =============================================
 -- Reviews Table Schema
--- One review per booking enforced by UNIQUE constraint on BookingId
+-- Booking-based review (BookingId NOT NULL, one per booking) +
+-- Open review from Explore view (BookingId NULL, one per tourist per guide,
+--   tour complete na korleo je keo rating/review dite parbe)
 -- =============================================
 
 CREATE TABLE Reviews (
     Id           INT IDENTITY PRIMARY KEY,
-    BookingId    INT NOT NULL,
+    BookingId    INT NULL,
     TouristUserId INT NOT NULL,
     GuideId      INT NOT NULL,
     Rating       TINYINT NOT NULL CHECK (Rating >= 1 AND Rating <= 5),
@@ -73,9 +75,13 @@ CREATE TABLE Reviews (
 
     CONSTRAINT FK_Reviews_Booking FOREIGN KEY (BookingId) REFERENCES Bookings(Id),
     CONSTRAINT FK_Reviews_Tourist FOREIGN KEY (TouristUserId) REFERENCES Users(Id),
-    CONSTRAINT FK_Reviews_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id),
-    CONSTRAINT UQ_Reviews_Booking UNIQUE (BookingId)
+    CONSTRAINT FK_Reviews_Guide FOREIGN KEY (GuideId) REFERENCES Users(Id)
 );
+
+-- One review per booking (only for booking-based reviews)
+CREATE UNIQUE INDEX UQ_Reviews_Booking ON Reviews(BookingId) WHERE BookingId IS NOT NULL;
+-- One open review per tourist per guide (Explore view, no tour needed)
+CREATE UNIQUE INDEX UQ_Reviews_Open_TouristGuide ON Reviews(TouristUserId, GuideId) WHERE BookingId IS NULL;
 
 CREATE INDEX IX_Reviews_Guide ON Reviews(GuideId);
 CREATE INDEX IX_Reviews_Tourist ON Reviews(TouristUserId);
