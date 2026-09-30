@@ -53,8 +53,8 @@ export const getAllBookings = async (req, res) => {
   // Course topic VIEW: vari JOIN ta db/views.sql -> vw_BookingDetails e rakha.
   // Controller ekhon sudhu view theke filter kore.
   const whereClause =
-    role === 'guide' ? 'GuideId = @userId'
-    : role === 'tourist' ? 'TouristUserId = @userId'
+    role === 'guide' ? 'v.GuideId = @userId'
+    : role === 'tourist' ? 'v.TouristUserId = @userId'
     : '1=1';
   const sql = `
     SELECT
