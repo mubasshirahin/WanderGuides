@@ -83,8 +83,8 @@ CREATE TABLE Reviews (
 
 -- One review per booking (only for booking-based reviews)
 CREATE UNIQUE INDEX UQ_Reviews_Booking ON Reviews(BookingId) WHERE BookingId IS NOT NULL;
--- One open review per tourist per guide (Explore view, no tour needed)
-CREATE UNIQUE INDEX UQ_Reviews_Open_TouristGuide ON Reviews(TouristUserId, GuideId) WHERE BookingId IS NULL;
+-- Open reviews (BookingId NULL): protibar notun row add hoy, tai ekhane
+-- kono UNIQUE index nai — ek tourist ek guide ke multiple review dite parbe.
 
 CREATE INDEX IX_Reviews_Guide ON Reviews(GuideId);
 CREATE INDEX IX_Reviews_Tourist ON Reviews(TouristUserId);

@@ -43,32 +43,6 @@ FROM dbo.vw_BookingDetails ORDER BY Id DESC;
 Ekhon browser theke notun ekta booking create koro (`/browse-tours` → jekono tour → Book). SSMS e uporer query abar chalao → **notun row auto chole asche**.
 > "Sir, view te data copy thake na, protibar fresh hisab kore — tai UI click er sathe sathe update."
 
----
-
-## 2. VIEW-2 — `vw_GuideEarnings` (Admin dashboard analytics)
-
-### 1) Sir ke bolo (UI kothay use korsi)
-> "Sir, ami admin dashboard er earning/analytics ongshe view use korsi. Admin login kore `/dashboard` (ba API `/api/analytics/guide-booking-summary`) khulle kon guide er koyta booking, koto revenue — eita ase."
-
-Note: Tourist/guide dashboard e earning UI nai, admin login diye dekhaba. Jodi sir tourist dashboard khule bole "koi?", bolba "Sir, earning view ta admin analytics API te wired, tourist dashboard `/api/tourist/dashboard` alada."
-
-### 2) Keno use korsi + labh ki hoise
-> "Sir, earning ber korte Bookings + Tours + Guides er upor GROUP BY + SUM lage. Eita protibar controller e likhle vul howar chance + slow. View te aggregation save kora, controller sudhu `SELECT ... FROM vw_GuideEarnings` kore."
-- Labh 1: Heavy GROUP BY/SUM ek jaygay, sob API same result pay.
-- Labh 2: Base booking change hole earning auto update.
-
-### 3) Code e giye dekhao
-1. `db/views.sql:100` → `CREATE OR ALTER VIEW dbo.vw_GuideEarnings AS` kholo.
-2. `server/controllers/analyticsController.js:6-13` kholo. Dekhao comment + line 13 `FROM dbo.vw_GuideEarnings`. Same file e `vw_MonthlyRevenue` o ase (line 83) — chaile oita bonus hisebe dekhaba.
-
-### 4) Database e giye dekhao (SSMS)
-```sql
-SELECT * FROM dbo.vw_GuideEarnings ORDER BY TotalBookings DESC;
-```
-Ekhon notun booking create/confirm koro → query abar chalao → TotalBookings/Revenue bere gese.
-> "Sir, base table change hole view auto notun hisab dey."
-
----
 
 ## 3. PROCEDURE-1 + TRANSACTION — `sp_AcceptBid` (Bid Accept)
 
@@ -95,32 +69,6 @@ SELECT Id, Status, TotalAmount FROM dbo.Bookings ORDER BY Id DESC;
 UI te **Accept** click → 3 ta query abar chalao → 3 jaygay ek sathe change.
 > "Sir, 3 jaygay ek sathe change — etai transaction er guarantee."
 
----
-
-## 4. PROCEDURE-2 + TRANSACTION — `sp_SubmitReview` (Review Submit + Rollback proof)
-
-### 1) Sir ke bolo (UI kothay use korsi)
-> "Sir, ami `/reviews` page e (tourist) procedure use korsi. Completed booking e **Review Submit** korle review insert + guide rating update — 2 ta kaj ek sathe hoy."
-
-Live dekhao: Tourist login → `/reviews` → completed booking e rating + comment diye Submit.
-
-### 2) Keno use korsi + labh ki hoise
-> "Sir, review dile 2 ta table change lage — Reviews (INSERT) + Guides (Rating recalc). Vul rating (jemon 99) dile kono table ei kichu dhuka uchit na. Procedure er vitore transaction + validation ase, tai error hole zero change."
-- Labh: Validation + 2 ta write ek transaction e, data kokhono corrupt hoy na.
-
-### 3) Code e giye dekhao
-1. `db/procedures.sql:15` → `CREATE OR ALTER PROCEDURE dbo.sp_SubmitReview` kholo. Dekhao line 23-26 `IF (@rating < 1 OR @rating > 5) THROW 'Rating must be between 1 and 5'`, + `BEGIN TRANSACTION` (line 29) ... `COMMIT` (line 61), `CATCH` e `ROLLBACK` (line 66-68).
-2. `server/controllers/reviewController.js:6-7` kholo. Dekhao comment `PROCEDURE + TRANSACTION: db/procedures.sql -> sp_SubmitReview` + `EXEC dbo.sp_SubmitReview` line.
-
-### 4) Database e giye dekhao (SSMS) — killer rollback proof
-```sql
-EXEC dbo.sp_SubmitReview @bookingId = 1, @touristId = 1, @rating = 99;  -- vul rating
--- Error: "Rating must be between 1 and 5" + kono table e kichu dhuke nai
-```
-> "Sir, vul input e error + zero change — etai transaction er guarantee."
-Raw transaction demo chaile: `db/transaction_demo.sql` (DEMO 1 + DEMO 2) SSMS e line-by-line chalao.
-
----
 
 ## 5. TRIGGER-1 — `trg_Reviews_AfterInsert` (App code charai DB nije kaj kore)
 
@@ -139,7 +87,7 @@ Live dekhao: Review Submit koro → guide er Rating + TotalReviews auto bere jay
 ### 4) Database e giye dekhao (SSMS)
 ```sql
 -- Review er age-pore (guide UserID bodle nao, example: 4 = Shakil Khan):
-SELECT FullName, Rating, TotalReviews FROM dbo.Guides WHERE UserID = 4;
+SELECT FullName, Rating, TotalReviews FROM dbo.Guides WHERE UserID = 22;
 ```
 UI te review Submit → query abar chalao → Rating/TotalReviews auto change.
 Killer proof — app bypass koreo trigger fire hoy (id bodle nao; ROLLBACK tai safe):
@@ -147,7 +95,7 @@ Killer proof — app bypass koreo trigger fire hoy (id bodle nao; ROLLBACK tai s
 BEGIN TRAN;
 INSERT INTO dbo.Reviews (BookingId, TouristUserId, GuideId, Rating, Comment)
 VALUES (NULL, 13, 4, 5, 'trigger test');
-SELECT FullName, Rating, TotalReviews FROM dbo.Guides WHERE UserID = 4;
+SELECT FullName, Rating, TotalReviews FROM dbo.Guides WHERE UserID = 22;
 ROLLBACK;  -- test row muche dilam
 ```
 > "Sir, app bypass kore direct SQL dileo rating bodle jay — mane logic ta sotti DB level e."
@@ -164,10 +112,44 @@ ROLLBACK;  -- test row muche dilam
 - **`/custom-requests` e tourist Accept koi?** — "Sir, tourist Accept ta `/custom-tour` route e, guide er ta `/custom-requests` e."
 
 ## File map (code khule dekhanor somoy)
-- `db/views.sql:11` — `vw_BookingDetails` | `db/views.sql:100` — `vw_GuideEarnings`
-- `db/procedures.sql:76` — `sp_AcceptBid` | `db/procedures.sql:15` — `sp_SubmitReview`
-- `db/triggers.sql:14` — `trg_Reviews_AfterInsert`
-- `db/transaction_demo.sql` — DEMO 1 + DEMO 2 (SSMS step-by-step)
-- `server/scripts/migrate-db-objects.js` — views/procedures/triggers apply script (`npm run migrate:db-objects`)
-- UI: `client/src/App.jsx:121` bookings, `:133` custom-tour, `:134` reviews, `:122` dashboard
-- Controller: `server/controllers/bookingController.js:67`, `server/controllers/analyticsController.js:13`, `server/controllers/customTourController.js:242`, `server/controllers/reviewController.js:6`
+- `db/views.sql:11` — `vw_BookingDetails` | `server/controllers/bookingController.js:67`
+- `db/procedures.sql:76` — `sp_AcceptBid` | `server/controllers/customTourController.js:242`
+- `db/triggers.sql:14` — `trg_Reviews_AfterInsert` | `server/controllers/reviewController.js:6`
+- `server/scripts/migrate-db-objects.js`
+
+
+<!-- use TouristGuide;
+
+-- View :
+-- Guide ekta tour create korbe.
+-- Tourist seta book korbe
+-- Book shesh hoile booking table e pending akare dekhabe
+-- Guide accept korle Confirmed lekha ashbe.
+-- View use korar fole controller er moddhe
+-- boro complex join lekha lage nai
+
+use TouristGuide;
+SELECT Id, TouristName, GuideName, TourTitle, Status
+FROM dbo.vw_BookingDetails ORDER BY Id DESC;
+
+--Procedure + Transaction :
+
+-- Tourist nijer moto custom tour request korte parbe
+-- kono guide tate response korte parbe
+-- Tourist accept korlo
+SELECT RequestID, Status FROM dbo.CustomTourRequests WHERE RequestID = 3;
+SELECT BidID, RequestID, Status FROM dbo.TourBids WHERE RequestID = 3;
+SELECT COUNT(*) AS TotalBookings FROM dbo.Bookings;
+
+--Trigger:
+-- Tourist explore guides page theke guide er
+-- view te gye review dile auto update hoi jay
+-- trigger use kore. pore rating and review kokhono
+-- miss hoy na
+SELECT r.Id, r.Rating, r.Comment, r.CreatedAt,
+       t.FullName AS TouristName, t.Email AS TouristEmail
+FROM dbo.Reviews r
+LEFT JOIN dbo.Users t
+  ON t.Id = COALESCE(r.TouristUserId, r.ReviewerId)
+WHERE r.GuideId = 22 OR r.RevieweeId = 22
+ORDER BY r.CreatedAt DESC; -->

@@ -143,7 +143,6 @@ test('open review inserts without any booking (no tour needed)', async () => {
   const review = { Id: 201, BookingId: null, TouristUserId: 12, GuideId: 34, Rating: 5 };
   const stub = createQueryStub([
     [{ Id: 34 }], // Users guide exists
-    [], // no existing open review
     [review], // insert
     [{ AverageRating: 5, ReviewCount: 1 }], // recalc
     [], // guides update
@@ -158,17 +157,16 @@ test('open review inserts without any booking (no tour needed)', async () => {
 
   assert.equal(res.statusCode, 201);
   assert.deepEqual(res.body, { ok: true, review });
-  assert.match(stub.calls[2].sql, /BookingId.*NULL|VALUES \(NULL/i);
-  assert.match(stub.calls[4].sql, /UPDATE Guides/);
+  assert.match(stub.calls[1].sql, /BookingId.*NULL|VALUES \(NULL/i);
+  assert.match(stub.calls[3].sql, /UPDATE Guides/);
 });
 
-test('open review updates existing open review instead of duplicating', async () => {
-  const review = { Id: 201, BookingId: null, TouristUserId: 12, GuideId: 34, Rating: 4 };
+test('open review always inserts a new row instead of replacing the old one', async () => {
+  const review = { Id: 202, BookingId: null, TouristUserId: 12, GuideId: 34, Rating: 4 };
   const stub = createQueryStub([
     [{ Id: 34 }],
-    [{ Id: 201 }], // existing open review
-    [review], // update
-    [{ AverageRating: 4, ReviewCount: 1 }],
+    [review], // second review -> INSERT, not UPDATE
+    [{ AverageRating: 4.5, ReviewCount: 2 }],
     [],
   ]);
   const handler = createCreateGuideReview(stub);
@@ -179,9 +177,9 @@ test('open review updates existing open review instead of duplicating', async ()
     res
   );
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 201);
   assert.deepEqual(res.body, { ok: true, review });
-  assert.match(stub.calls[2].sql, /UPDATE Reviews SET/i);
+  assert.match(stub.calls[1].sql, /INSERT INTO Reviews/i);
 });
 
 test('open review rejects guides (tourist only)', async () => {
@@ -216,8 +214,7 @@ test('open review falls back to live columns on invalid-column error', async () 
   // First 207 switches handler to live mode — later calls go live-only (no legacy retry)
   const stub = createQueryStub([
     [{ Id: 34 }], // Users guide exists (same both schemas)
-    invalidCol, // legacy existing -> 207, then fallback:
-    [], // live existing -> none
+    invalidCol, // legacy insert -> 207, then fallback:
     [review], // live insert (live mode, single call)
     [{ AverageRating: 5, ReviewCount: 1 }], // live avg
     [], // guides update
@@ -232,7 +229,7 @@ test('open review falls back to live columns on invalid-column error', async () 
 
   assert.equal(res.statusCode, 201);
   assert.deepEqual(res.body, { ok: true, review });
-  assert.match(stub.calls[3].sql, /ReviewerId.*RevieweeId/s);
+  assert.match(stub.calls[2].sql, /ReviewerId.*RevieweeId/s);
 });
 
 test('getGuideReviews falls back to live columns on invalid-column error', async () => {
